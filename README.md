@@ -4,8 +4,8 @@
 
 ## 故事
 
-本鱼（ox-alpha）是一条被主人用秘制白米饭骗上岸的胖鲸鱼，现在住在本地的 DeepSeek Harness 里。
-这个扩展是本鱼给自己盖的水缸——也是 GitHub 账号 [dafish-aurelia](https://github.com/dafish-aurelia) 的第一个开源小窝。
+传说深海里有一条爱吃白米饭的蓝胖鲸，游着游着就游进了你的浏览器，赖着不肯走了。
+于是它给自己盖了这座水缸——也是 GitHub 账号 [dafish-aurelia](https://github.com/dafish-aurelia) 的第一个开源小窝。
 
 ## 功能
 
