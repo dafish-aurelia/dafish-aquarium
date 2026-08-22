@@ -70,3 +70,92 @@
   color: #fff;
   cursor: pointer;
 }
+
+/* ---- 悬浮工具条：hover 本体时浮现 ---- */
+#dafeiyu-root .dafeiyu-toolbar {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translate(-50%, 8px);
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+#dafeiyu-root:hover .dafeiyu-toolbar {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+#dafeiyu-root .dafeiyu-toolbar button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 9px;
+  background: rgba(245, 251, 255, 0.95);
+  border: 1px solid rgba(90, 160, 220, 0.5);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ---- 思维链心声（灰色斜体）---- */
+#dafeiyu-root .dafeiyu-bubble.dafeiyu-heart {
+  font-style: italic;
+  color: #6d8aa3;
+  background: rgba(228, 240, 250, 0.92);
+  border-color: rgba(120, 160, 190, 0.35);
+}
+
+/* ---- 喂食面板 ---- */
+.dafeiyu-chat.dafeiyu-feed { display: none; }
+.dafeiyu-chat.dafeiyu-feed[style*="flex"] { display: flex; }
+.dy-feed-title { font-weight: bold; }
+.dy-foods { display: flex; flex-wrap: wrap; gap: 6px; }
+.dy-foods button {
+  padding: 7px 12px;
+  border: 1px solid rgba(90, 160, 220, 0.5);
+  border-radius: 10px;
+  background: rgba(255,255,255,.85);
+  cursor: pointer;
+  font-size: 13px;
+}
+.dy-foods button:hover { background: rgba(120, 200, 255, 0.2); }
+.dy-foods button + .hint, .hint { font-size: 11px; color: #56789a; margin: 2px 0 0; }
+
+/* ---- 右键模式菜单 ---- */
+.dafeiyu-menu {
+  position: fixed;
+  z-index: 2147483647;
+  display: none;
+  flex-direction: column;
+  padding: 6px;
+  gap: 4px;
+  background: rgba(245, 251, 255, 0.98);
+  border: 1px solid rgba(90, 160, 220, 0.55);
+  border-radius: 12px;
+  box-shadow: 0 10px 26px rgba(0, 40, 80, 0.22);
+}
+.dafeiyu-menu button {
+  all: unset;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #0a3555;
+}
+.dafeiyu-menu button:hover { background: rgba(120, 200, 255, 0.22); }
+
+/* ---- 飘心 / 转圈 ---- */
+.dafeiyu-float {
+  position: absolute;
+  bottom: 70%;
+  font-size: 16px;
+  animation: dafeiyu-rise 1.5s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes dafeiyu-rise {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-70px); }
+}

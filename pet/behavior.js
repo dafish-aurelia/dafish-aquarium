@@ -3,32 +3,23 @@
   if (!V) return;
 
   let quips = [];
-  const tickets = [];            // 本鱼投递的主动搭话券
+  let hearts = [];
+  const tickets = [];
   let lastQuip = 0;
   let lastDeep = 0;
-  let tabSwitchAt = 0;           // Tab 刚切换时闭嘴 10 秒
-  const CD_GLOBAL = 300e3;       // 搭话全局冷却
-  const CD_DEEP = 900e3;         // 深聊后冷却
-  const CD_TAB = 10e3;
-  let greeted = false;           // HOME 迎宾语只说一次
+  let tabSwitchAt = 0;
+  let lastHeart = Date.now();
+  let mode = 'walk'; // walk | follow | still
+  let followX = null;
+  let greeted = false;
+  const CD_GLOBAL = 300e3, CD_DEEP = 900e3, CD_TAB = 10e3;
 
   function isActive() {
-    return V.S.enabled && V.S.active && window.__dafeiyuVisible !== false;
+    return !!(V.S && V.S.enabled && V.S.active);
   }
-
-  fetch(chrome.runtime.getURL('quip.json'))
-    .then((r) => r.json())
-    .then((q) => { quips = q; })
-    .catch(() => {});
-
-  function pickQuip() {
-    return quips.length ? quips[Math.floor(Math.random() * quips.length)] : '咕噜噜……';
-  }
-
   function chatOpen() {
     return !!(window.DafeiyuChat && window.DafeiyuChat.isOpen());
   }
-
   function canSpeak() {
     const now = Date.now();
     return now - lastQuip > CD_GLOBAL &&
@@ -37,34 +28,41 @@
       !chatOpen();
   }
 
-  // ---- HOME：水缸主页是她的家 ----
+  fetch(chrome.runtime.getURL('quip.json')).then((r) => r.json()).then((q) => { quips = q; }).catch(() => {});
+  fetch(chrome.runtime.getURL('quip_heart.json')).then((r) => r.json()).then((q) => { hearts = q; }).catch(() => {});
+
+  function pick(arr) { return arr.length ? arr[Math.floor(Math.random() * arr.length)] : ''; }
+  function pickQuip() { return pick(quips) || '咕噜噜……'; }
+
+  // ---- HOME：水缸主页是家 ----
   function isHome() {
     try {
       return decodeURIComponent(location.href)
         .startsWith('file:///G:/life/Aurelia的工作区/browser/start.html');
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
-
   function homeWelcome() {
-    if (!isHome() || greeted) return;
+    if (!isHome() || greeted || !isActive()) return;
     greeted = true;
-    // 固定迎宾站位：屏幕中下方
     V.W.x = Math.max(60, Math.floor(innerWidth / 2) - 55);
     V.root.style.left = V.W.x + 'px';
     setTimeout(() => { if (isActive()) V.showBubble('主人来啦～水温刚好哦！', 5000); }, 800);
   }
   homeWelcome();
 
-  // ---- 散步状态机：家里只小幅摇摆，外面全宽散步 ----
-  setInterval(() => {
-    if (!isActive() || !canSpeak() && V.W.state !== 'IDLE') { /* 冷却期不出发新行程 */ }
-    if (!isActive() || V.W.state !== 'IDLE') return;
-    if (chatOpen()) return;
+  // ---- 模式：walk 散步 / follow 跟随鼠标 / still 原地 ----
+  function setMode(m) {
+    if (!['walk', 'follow', 'still'].includes(m)) return;
+    mode = m;
+    chrome.storage.local.set({ pet_mode: m });
+  }
+  chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) { mode = pet_mode; V.W.mode = pet_mode; } });
 
+  document.addEventListener('pointermove', (e) => { if (mode === 'follow') followX = e.clientX; });
+
+  setInterval(() => {
+    if (!isActive() || V.W.state !== 'IDLE' || chatOpen()) return;
     if (isHome()) {
-      // 原地摇摆 ±12px
       V.W.state = 'SWAY';
       const base = parseInt(V.root.style.left, 10) || V.W.x;
       let i = 0;
@@ -74,7 +72,20 @@
       }, 120);
       return;
     }
-
+    if (mode === 'still') return;
+    if (mode === 'follow') {
+      if (followX == null || Math.abs(followX - V.W.x) < 24) return;
+      V.W.state = 'WALK';
+      V.W.dir = followX > V.W.x ? 1 : -1;
+      V.setSprite('侧面.png', V.W.dir > 0);
+      const t = setInterval(() => {
+        if (followX == null || Math.abs(followX - V.W.x) < 12) { clearInterval(t); V.W.state = 'IDLE'; V.setSprite('正面.png', false); return; }
+        V.W.x += V.W.dir * 2.2;
+        V.root.style.left = Math.max(60, Math.min(innerWidth - 60, V.W.x)) + 'px';
+      }, 40);
+      return;
+    }
+    // walk
     V.W.state = 'WALK';
     V.W.dir = Math.random() < 0.5 ? -1 : 1;
     V.setSprite('侧面.png', V.W.dir > 0);
@@ -83,15 +94,11 @@
     const t = setInterval(() => {
       V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 1.5));
       V.root.style.left = V.W.x + 'px';
-      if (++i > steps) {
-        clearInterval(t);
-        V.W.state = 'IDLE';
-        V.setSprite('正面.png', false);
-      }
+      if (++i > steps) { clearInterval(t); V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
     }, 40);
   }, 9000 + Math.random() * 8000);
 
-  // ---- 信件到达（由 background 独家派发）----
+  // ---- 信件派发（background 独家）----
   function chatAppendIfOpen(who, text) {
     if (window.DafeiyuChat && window.DafeiyuChat.isOpen()) window.DafeiyuChat.append(who, text);
   }
@@ -117,7 +124,6 @@
     }
   });
 
-  // ---- 说话决策：搭话券优先，本地台词兜底；该闭嘴就闭嘴 ----
   function maybeSpeak(force) {
     if (!isActive() || !canSpeak()) return;
     const now = Date.now();
@@ -130,23 +136,36 @@
       V.showBubble(t.text, 6000);
       return;
     }
-    if (force || Math.random() < 0.3) {
-      lastQuip = now;
-      V.showBubble(pickQuip(), 5000);
-    }
+    if (force || Math.random() < 0.3) { lastQuip = now; V.showBubble(pickQuip(), 5000); }
   }
-
-  // 随机搭话兜底定时（15~40 分钟）
   function armQuipTimer() {
-    setTimeout(() => { maybeSpeak(true); armQuipTimer(); },
-      15 * 60e3 + Math.random() * 25 * 60e3);
+    setTimeout(() => { maybeSpeak(true); armQuipTimer(); }, 15 * 60e3 + Math.random() * 25 * 60e3);
   }
   armQuipTimer();
 
+  // ---- 思维链心声：灰色斜体小气泡，独立于搭话冷却，更轻更频 ----
+  setInterval(() => {
+    if (!hearts.length || !isActive() || chatOpen() || Math.random() > 0.45) return;
+    const now = Date.now();
+    if (now - lastHeart < 3 * 60e3) return;
+    lastHeart = now;
+    V.showHeart('（' + pick(hearts) + '）', 5200);
+  }, 4 * 60e3);
+
+  // ---- 电量彩蛋（一次性）----
+  if (navigator.getBattery) {
+    navigator.getBattery().then((b) => {
+      if (!b.charging && b.level < 0.2) {
+        setTimeout(() => { if (isActive()) V.showBubble('主人的设备饿电了…记得喂它呀⚡', 6000); }, 60e3);
+      }
+    }).catch(() => {});
+  }
+
   window.DafeiyuBehavior = {
     pickQuip,
+    getMode: () => mode,
+    setMode,
     markDeep: () => { lastDeep = Date.now(); },
     markQuip: () => { lastQuip = Date.now(); },
-    markTabSwitch: () => { tabSwitchAt = Date.now(); },
   };
 })();

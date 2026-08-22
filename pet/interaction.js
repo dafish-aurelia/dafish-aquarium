@@ -3,37 +3,157 @@
   const B = window.DafeiyuBehavior;
   if (!V || !B) return;
 
-  // ---- 拖拽：Pointer Events + setPointerCapture（不与页面选字打架）----
+  // ---- 拖拽（Pointer Events）+ 转圈晕眩检测 ----
   let dragging = false, moved = false, downX = 0, downY = 0;
+  let prevAng = null, angAccum = 0, dragStartTs = 0, dizzyArmed = false;
+
+  function centerOf() {
+    const r = V.img.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
   V.img.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    dragging = true; moved = false; downX = e.clientX; downY = e.clientY;
+    dragging = true; moved = false; dizzyArmed = false;
+    downX = e.clientX; downY = e.clientY;
+    prevAng = null; angAccum = 0; dragStartTs = Date.now();
     V.img.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
   V.img.addEventListener('pointermove', (e) => {
     if (!dragging) return;
     if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 6) moved = true;
-    if (moved) {
-      V.W.x = Math.max(60, Math.min(innerWidth - 60, e.clientX));
-      V.root.style.left = V.W.x + 'px';
-      V.root.style.bottom = Math.max(0, innerHeight - e.clientY - 24) + 'px';
+    if (!moved) return;
+    V.W.x = Math.max(60, Math.min(innerWidth - 60, e.clientX));
+    V.root.style.left = V.W.x + 'px';
+    V.root.style.bottom = Math.max(0, innerHeight - e.clientY - 24) + 'px';
+    if (Date.now() - dragStartTs < 1500) {
+      const c = centerOf();
+      const ang = Math.atan2(e.clientY - c.y, e.clientX - c.x);
+      if (prevAng != null) {
+        let d = ang - prevAng;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        angAccum += d;
+        if (Math.abs(angAccum) > Math.PI * 1.5) dizzyArmed = true;
+      }
+      prevAng = ang;
     }
   });
   const endDrag = () => {
-    if (dragging && moved) V.showBubble(B.pickQuip(), 3000);
+    if (dragging && moved) {
+      if (dizzyArmed) {
+        V.spin();
+        V.showBubble('唔……缸在转……本鱼的平衡鳔呢……', 4500);
+      } else {
+        V.showBubble(B.pickQuip(), 3000);
+      }
+    }
     dragging = false;
   };
   V.img.addEventListener('pointerup', endDrag);
   V.img.addEventListener('pointercancel', () => { dragging = false; });
 
-  // 单击 = 蹦跳 + 吐槽；双击 = 聊天面板
+  // 单击 = 蹦跳吐槽；双击 = 喂食面板
   V.img.addEventListener('click', () => {
     if (moved) return;
     V.setSprite('正面.png', false);
+    V.hop();
     V.showBubble(B.pickQuip(), 3500);
   });
-  V.img.addEventListener('dblclick', () => window.DafeiyuChat.open());
+
+  // ---- 好感度 ----
+  let intimacy = 0;
+  chrome.storage.local.get('intimacy').then(({ intimacy: v = 0 }) => { intimacy = Number(v) || 0; });
+  function addIntimacy(n) {
+    intimacy += n;
+    chrome.storage.local.set({ intimacy: Math.round(intimacy * 10) / 10 });
+  }
+  function levelName() {
+    if (intimacy >= 60) return '本命鱼';
+    if (intimacy >= 30) return '贴身小鱼';
+    if (intimacy >= 10) return '熟识';
+    return '初见';
+  }
+
+  // ---- 喂食面板（双击本体打开，回归原版灵魂）----
+  const FOODS = [
+    ['小鱼干', '🐟干', 1, '小鱼干！本鱼的本命粮食！'],
+    ['蛋糕', '🍰', 2, '蛋糕……唔，甜的能游得更快。'],
+    ['棒棒糖', '🍭', 2, '棒棒糖插在珊瑚上就是一棵糖树！'],
+    ['团子', '🍡', 2, '团子好Q，跟本鱼一样圆。'],
+    ['钻石', '💎', 5, '钻、钻石？！主人你认真的吗？！'],
+  ];
+  const feedPanel = document.createElement('div');
+  feedPanel.className = 'dafeiyu-chat dafeiyu-feed';
+  feedPanel.innerHTML =
+    '<div class="dy-feed-title">🍽️ 投喂台 · <span class="dy-intimacy"></span></div>' +
+    '<div class="dy-foods"></div>' +
+    '<p class="hint">喂食会涨好感度哦。双击本体随时打开。</p>';
+  document.documentElement.appendChild(feedPanel);
+  const foodsBox = feedPanel.querySelector('.dy-foods');
+  const intimacySpan = feedPanel.querySelector('.dy-intimacy');
+  function refreshIntimacy() { intimacySpan.textContent = `好感度 ${intimacy} · ${levelName()}`; }
+  refreshIntimacy();
+  for (const [name, icon, gain] of FOODS) {
+    const btn = document.createElement('button');
+    btn.textContent = `${icon} ${name}`;
+    btn.addEventListener('click', () => {
+      addIntimacy(gain);
+      refreshIntimacy();
+      V.floatHearts(gain >= 5 ? 6 : 3);
+      V.hop();
+      const line = FOODS.find((f) => f[0] === name)[3];
+      V.showBubble(`${line}（${name} +好感）`, 4000);
+      window.DafeiyuChat.append('她', `[吃掉了${name}] ${line}`);
+    });
+    foodsBox.appendChild(btn);
+  }
+
+  // ---- 工具条：💬聊天 / 🍪喂食 / ⚙️大小 ----
+  const SIZES = [0.8, 1, 1.3];
+  let sizeIdx = 1;
+  chrome.storage.local.get('pet_scale').then(({ pet_scale: s = 1 }) => {
+    sizeIdx = Math.max(0, SIZES.indexOf(Number(s)));
+    if (sizeIdx < 0) sizeIdx = 1;
+  });
+  V.root.querySelector('.dafeiyu-toolbar').addEventListener('click', async (e) => {
+    const act = e.target?.dataset?.act;
+    if (!act) return;
+    e.stopPropagation();
+    if (act === 'chat') window.DafeiyuChat.open();
+    if (act === 'feed') {
+      refreshIntimacy();
+      feedPanel.style.display = feedPanel.style.display === 'flex' ? 'none' : 'flex';
+      window.DafeiyuChat && (window.DafeiyuChat.close ? window.DafeiyuChat.close() : null);
+    }
+    if (act === 'gear') {
+      sizeIdx = (sizeIdx + 1) % SIZES.length;
+      await chrome.storage.local.set({ pet_scale: SIZES[sizeIdx] }); // onChanged 驱动 setScale
+    }
+  });
+
+  // ---- 右键模式菜单（散步/跟随/待着）----
+  const modeMenu = document.createElement('div');
+  modeMenu.className = 'dafeiyu-menu';
+  modeMenu.innerHTML =
+    '<button data-m="walk">🚶 自由散步</button>' +
+    '<button data-m="follow">🖱️ 跟随鼠标</button>' +
+    '<button data-m="still">🧘 原地待着</button>';
+  modeMenu.style.display = 'none';
+  document.documentElement.appendChild(modeMenu);
+  V.img.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    modeMenu.style.display = 'block';
+    modeMenu.style.left = Math.min(innerWidth - 140, e.clientX) + 'px';
+    modeMenu.style.top = Math.min(innerHeight - 130, e.clientY) + 'px';
+  });
+  modeMenu.addEventListener('click', (e) => {
+    const m = e.target?.dataset?.m;
+    if (m) { B.setMode(m); V.showBubble(`切换到「${{walk:'自由散步', follow:'跟随鼠标', still:'原地待着'}[m]}」`, 3000); }
+    modeMenu.style.display = 'none';
+  });
+  document.addEventListener('click', () => { modeMenu.style.display = 'none'; });
 
   // ---- 聊天面板 ----
   const panel = document.createElement('div');
@@ -47,16 +167,17 @@
     '<button class="dy-send">说</button></div>';
   document.documentElement.appendChild(panel);
   const log = panel.querySelector('.dafeiyu-chat-log');
-  const conversationContext = []; // 只存对话历史；浏览轨迹属 browser_context（V1.5）
-
+  const conversationContext = [];
   window.DafeiyuChat = {
     isOpen: () => panel.style.display !== 'none',
     open() { panel.style.display = 'flex'; log.scrollTop = log.scrollHeight; },
+    close() { panel.style.display = 'none'; },
     append(who, text) {
       const d = document.createElement('div');
       d.textContent = who + '：' + text;
       log.appendChild(d);
       log.scrollTop = log.scrollHeight;
+      conversationContext.push({ who, text });
     },
   };
 
@@ -71,16 +192,15 @@
     conversationContext.push({ who: '主人', text: clean });
 
     if (!deep) {
-      // 快聊：本地台词，秒回
       B.markQuip();
       const r = B.pickQuip();
       conversationContext.push({ who: '她', text: r });
       V.showBubble(r, 4000);
       window.DafeiyuChat.append('她', r);
+      addIntimacy(0.2);
       return;
     }
 
-    // 深聊：统一交给信局路由（本鱼在线=转信；离线=代班小鱼顶班）
     V.showBubble('（装进信封，游向缸里……）', 3000);
     const env = {
       type: 'deep_chat',
@@ -93,6 +213,7 @@
     if (res && res.mode === 'fish') {
       B.markDeep();
       window.DafeiyuChat.append('她', '信送到了，等本鱼回信～');
+      addIntimacy(0.5);
     } else if (res && res.mode === 'standin') {
       B.markDeep();
       window.DafeiyuChat.append('代班小鱼', res.text);
@@ -102,7 +223,8 @@
     }
   }
   panel.querySelector('.dy-send').addEventListener('click', send);
-  panel.querySelector('.dy-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') send();
-  });
+  panel.querySelector('.dy-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+
+  // 快聊也涨一点陪伴值
+  setInterval(refreshIntimacy, 5000);
 })();
