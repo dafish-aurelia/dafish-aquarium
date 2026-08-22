@@ -54,6 +54,7 @@
   function setMode(m) {
     if (!['walk', 'follow', 'still'].includes(m)) return;
     mode = m;
+    V.W.state = 'IDLE'; // 切模式时复位残留状态，防止卡死在旧状态（P0 教训）
     chrome.storage.local.set({ pet_mode: m });
   }
   chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) { mode = pet_mode; V.W.mode = pet_mode; } });
@@ -89,7 +90,11 @@
 
   // follow 专用平滑循环：独立于散步调度器，随时响应鼠标（80ms 一帧）
   setInterval(() => {
-    if (mode !== 'follow' || !isActive()) return;
+    if (mode !== 'follow') {
+      if (V.W.state === 'FOLLOW') V.W.state = 'IDLE'; // 自愈：模式切走后复位残留
+      return;
+    }
+    if (!isActive()) return;
     if (followX == null || chatOpen()) return;
     const dx = followX - V.W.x;
     if (Math.abs(dx) <= 16) {

@@ -184,8 +184,14 @@
     close() { panel.style.display = 'none'; },
     append(who, text) {
       const d = document.createElement('div');
-      d.textContent = who + '：' + text;
+      d.className = 'dy-msg' + (who === '主人' ? ' dy-me' : '');
+      const w = document.createElement('span');
+      w.className = 'dy-who';
+      w.textContent = who;
+      d.appendChild(w);
+      d.appendChild(document.createTextNode(text));
       log.appendChild(d);
+      while (log.children.length > 50) log.removeChild(log.firstChild);
       log.scrollTop = log.scrollHeight;
       conversationContext.push({ who, text });
     },

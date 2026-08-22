@@ -54,6 +54,29 @@
   flex-direction: column;
   gap: 6px;
 }
+/* ---- 聊天气泡：主人右蓝、她左白，不再全打竖 ---- */
+.dafeiyu-chat-log > div.dy-msg {
+  max-width: 86%;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(90, 160, 220, 0.35);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.dafeiyu-chat-log > div.dy-msg .dy-who {
+  display: block;
+  font-size: 10px;
+  color: #7ba3c4;
+  margin-bottom: 2px;
+}
+.dafeiyu-chat-log > div.dy-msg.dy-me {
+  margin-left: auto;
+  background: linear-gradient(135deg, #3fa7e0, #2b7fc4);
+  border: none;
+  color: #fff;
+}
+.dafeiyu-chat-log > div.dy-msg.dy-me .dy-who { color: rgba(255, 255, 255, 0.75); }
 .dafeiyu-chat .dafeiyu-chat-row { display: flex; gap: 6px; }
 .dafeiyu-chat input[type="text"] {
   flex: 1;
@@ -71,17 +94,18 @@
   cursor: pointer;
 }
 
-/* ---- 悬浮工具条：hover 本体时浮现 ---- */
+/* ---- 悬浮工具条：hover 本体时浮现（悬在头顶上方，不挡脸）---- */
 #dafeiyu-root .dafeiyu-toolbar {
   position: absolute;
-  top: -6px;
+  bottom: calc(100% + 8px);
   left: 50%;
-  transform: translate(-50%, 8px);
+  transform: translateX(-50%);
   display: flex;
+  flex-direction: row;
   gap: 4px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity 0.15s;
 }
 #dafeiyu-root:hover .dafeiyu-toolbar {
   opacity: 1;
