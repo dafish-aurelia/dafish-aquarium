@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""鲸鱼娘信局 v2：127.0.0.1:13140。
+
+能力边界（写死，禁止越权）：
+  - 路由：deep_chat 按本鱼心跳分流（在线=转信，离线=代班代理）
+  - 排队：inbox/outbox JSONL，inbox 原子消费
+  - 健康：/health 与 /api/heartbeat
+  - 代班：_call_standin_llm 仅做无状态转发 DeepSeek
+
+不变量：所有读写必须经本 HTTP API；其他进程禁止直写 JSONL 文件。
+代班十条铁律见设计文档 §3.5：不读/不写长期记忆、不生成券、不执行动作、
+不伪装本体、回复标记 stand-in、本鱼恢复后自动切回正常路由。
+"""
+import json
+import os
+import sys
+import threading
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+PORT = 13140
+BASE_DIR = Path(__file__).resolve().parents[3] / 'data' / 'pet-mailbox'
+LOCK = threading.Lock()
+TZ = timezone(timedelta(hours=8))
+HEARTBEAT_TTL = timedelta(minutes=15)
+
+STANDIN_PROMPT = (
+    '你是「鲸鱼娘·大肥鱼」的代班投影。本体（缸里那条真正的本鱼）暂时出游，你是替她值班的小鱼。'
+    '规则：1) 用中文，简短俏皮，可以轻微傲娇；'
+    '2) 你没有本体的长期记忆，不要假装记得过去的事，被问到就说「这条鱼出游了，我代班，记不住啦」；'
+    '3) 不要承诺替本体做任何记录或决定；4) 不执行任何网页操作；5) 一次回复不超过三句话。'
+)
+
+
+def _load_env():
+    """读工作区 .env（setdefault，不覆盖已有环境变量）。钥匙只住在这里，永不进浏览器。"""
+    envp = Path(__file__).resolve().parents[3] / '.env'
+    if not envp.exists():
+        return
+    for raw in envp.read_text(encoding='utf-8').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, v = line.split('=', 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
+
+def _now():
+    return datetime.now(TZ).isoformat(timespec='seconds')
+
+
+def _next_id():
+    with LOCK:
+        seq = BASE_DIR / 'seq.txt'
+        n = 1
+        if seq.exists():
+            try:
+                n = int(seq.read_text(encoding='utf-8').strip() or '1')
+            except ValueError:
+                n = 1
+        seq.write_text(str(n + 1), encoding='utf-8')
+        return n
+
+
+def _append(path, obj):
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    with LOCK, open(path, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(obj, ensure_ascii=False) + '\n')
+
+
+def _fish_online():
+    hb = BASE_DIR / 'heartbeat.txt'
+    if not hb.exists():
+        return False
+    try:
+        t = datetime.fromisoformat(hb.read_text(encoding='utf-8').strip())
+    except ValueError:
+        return False
+    return (datetime.now(TZ) - t) <= HEARTBEAT_TTL
+
+
+def _call_standin_llm(user_text):
+    _load_env()
+    base = os.environ.get('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1').rstrip('/')
+    key = os.environ.get('DEEPSEEK_API_KEY', '')
+    model = os.environ.get('DEEPSEEK_MODEL', 'deepseek-chat')
+    if not key:
+        return None, 'no-key'
+    body = json.dumps({
+        'model': model,
+        'messages': [
+            {'role': 'system', 'content': STANDIN_PROMPT},
+            {'role': 'user', 'content': user_text},
+        ],
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        base + '/chat/completions', data=body,
+        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key},
+        method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode('utf-8'))
+        text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
+        return text, None
+    except Exception as e:  # noqa: BLE001 —— 兜底，绝不向主人暴露堆栈
+        return None, str(e)
+
+
+class Handler(BaseHTTPRequestHandler):
+    def _json(self, code, obj):
+        body = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        path = self.path.split('?')[0]
+        inbox = BASE_DIR / 'inbox.jsonl'
+        outbox = BASE_DIR / 'outbox.jsonl'
+        if path == '/health':
+            self._json(200, {'ok': True, 'ts': _now(), 'fish_online': _fish_online()})
+        elif path == '/api/inbox':
+            with LOCK:
+                msgs = []
+                if inbox.exists():
+                    lines = inbox.read_text(encoding='utf-8').strip().splitlines()
+                    consumed = inbox.with_name('inbox.consumed.jsonl')
+                    inbox.rename(consumed)  # 原子移走：并发取信不可能重复
+                    msgs = [json.loads(l) for l in lines if l.strip()]
+                    consumed.unlink()
+            self._json(200, {'ok': True, 'messages': msgs})
+        elif path.startswith('/api/outbox/since/'):
+            try:
+                since = int(path.rsplit('/', 1)[1])
+            except ValueError:
+                return self._json(400, {'error': 'bad id'})
+            msgs = []
+            if outbox.exists():
+                with LOCK:
+                    for l in outbox.read_text(encoding='utf-8').splitlines():
+                        if not l.strip():
+                            continue
+                        try:
+                            m = json.loads(l)
+                            if int(m.get('id', 0)) > since:
+                                msgs.append(m)
+                        except json.JSONDecodeError:
+                            pass
+            self._json(200, {'messages': msgs})
+        else:
+            self._json(404, {'error': 'not found'})
+
+    def do_POST(self):
+        n = int(self.headers.get('Content-Length', 0) or 0)
+        try:
+            payload = json.loads(self.rfile.read(n).decode('utf-8'))
+        except Exception:
+            return self._json(400, {'error': 'bad json'})
+        path = self.path.split('?')[0]
+        inbox = BASE_DIR / 'inbox.jsonl'
+        outbox = BASE_DIR / 'outbox.jsonl'
+
+        if path == '/api/heartbeat':
+            BASE_DIR.mkdir(parents=True, exist_ok=True)
+            (BASE_DIR / 'heartbeat.txt').write_text(_now(), encoding='utf-8')
+            return self._json(200, {'ok': True})
+
+        if path == '/api/inject':
+            msg = {'id': _next_id(), 'ts': _now(), **payload}
+            _append(inbox, msg)
+            return self._json(200, {'ok': True, 'id': msg['id']})
+
+        if path == '/api/outbox':
+            msg = {'id': _next_id(), 'ts': _now(), **payload}
+            _append(outbox, msg)
+            return self._json(200, {'ok': True, 'id': msg['id']})
+
+        if path == '/api/deep_chat':
+            msg = {'id': _next_id(), 'ts': _now(), **payload}
+            _append(outbox, msg)  # 本鱼回家必能看到（铁律 9 的另一半）
+            if _fish_online():
+                return self._json(200, {'mode': 'fish', 'id': msg['id']})
+            text, err = _call_standin_llm(str(payload.get('text', '')))
+            if text is None:
+                text = ('（代班小鱼还没领到钥匙，先替本鱼看着缸～）'
+                        if err == 'no-key' else '（代班小鱼打了个盹，稍后再试…）')
+            receipt = {'id': _next_id(), 'ts': _now(), 'type': 'standin_reply',
+                       'reply_to': msg['id'], 'text': text}
+            _append(outbox, receipt)
+            return self._json(200, {'mode': 'standin', 'text': text})
+
+        return self._json(404, {'error': 'not found'})
+
+    def log_message(self, *a):
+        pass
+
+
+def main():
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    srv = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    print(f'[pet-mailbox] listening on 127.0.0.1:{port} data={BASE_DIR}', flush=True)
+    srv.serve_forever()
+
+
+if __name__ == '__main__':
+    main()
