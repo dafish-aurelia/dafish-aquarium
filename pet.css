@@ -1,0 +1,72 @@
+#dafeiyu-root {
+  position: fixed;
+  bottom: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+}
+#dafeiyu-root .dafeiyu-sprite {
+  width: 110px;
+  pointer-events: auto;
+  cursor: grab;
+  filter: drop-shadow(0 4px 10px rgba(0, 30, 60, 0.35));
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+}
+#dafeiyu-root .dafeiyu-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 260px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(240, 250, 255, 0.96);
+  border: 1px solid rgba(90, 160, 220, 0.5);
+  color: #0a3555;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 40, 80, 0.18);
+}
+.dafeiyu-chat {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  width: 300px;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(245, 251, 255, 0.97);
+  border: 1px solid rgba(90, 160, 220, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 40, 80, 0.25);
+  font-size: 13px;
+  color: #0a3555;
+}
+.dafeiyu-chat .dafeiyu-chat-log {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dafeiyu-chat .dafeiyu-chat-row { display: flex; gap: 6px; }
+.dafeiyu-chat input[type="text"] {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(90, 160, 220, 0.5);
+  outline: none;
+}
+.dafeiyu-chat button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #3fa7e0, #2b7fc4);
+  color: #fff;
+  cursor: pointer;
+}
