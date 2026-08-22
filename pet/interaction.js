@@ -138,7 +138,8 @@
   modeMenu.innerHTML =
     '<button data-m="walk">🚶 自由散步</button>' +
     '<button data-m="follow">🖱️ 跟随鼠标</button>' +
-    '<button data-m="still">🧘 原地待着</button>';
+    '<button data-m="still">🧘 原地待着</button>' +
+    '<button data-m="dodge">🫥 让个位（8秒）</button>';
   modeMenu.style.display = 'none';
   document.documentElement.appendChild(modeMenu);
   V.img.addEventListener('contextmenu', (e) => {
@@ -150,7 +151,16 @@
   });
   modeMenu.addEventListener('click', (e) => {
     const m = e.target?.dataset?.m;
-    if (m) { B.setMode(m); V.showBubble(`切换到「${{walk:'自由散步', follow:'跟随鼠标', still:'原地待着'}[m]}」`, 3000); }
+    if (m === 'dodge') {
+      // 暂时隐身让出点击区域，期间完全穿透；结束后按状态回归
+      V.root.style.display = 'none';
+      window.__dafeiyuVisible = false;
+      V.showBubble; // noop
+      setTimeout(() => { V.renderVisible(); }, 8000);
+    } else if (m) {
+      B.setMode(m);
+      V.showBubble(`切换到「${{ walk: '自由散步', follow: '跟随鼠标', still: '原地待着' }[m]}」`, 3000);
+    }
     modeMenu.style.display = 'none';
   });
   document.addEventListener('click', () => { modeMenu.style.display = 'none'; });

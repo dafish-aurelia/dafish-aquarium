@@ -73,18 +73,7 @@
       return;
     }
     if (mode === 'still') return;
-    if (mode === 'follow') {
-      if (followX == null || Math.abs(followX - V.W.x) < 24) return;
-      V.W.state = 'WALK';
-      V.W.dir = followX > V.W.x ? 1 : -1;
-      V.setSprite('侧面.png', V.W.dir > 0);
-      const t = setInterval(() => {
-        if (followX == null || Math.abs(followX - V.W.x) < 12) { clearInterval(t); V.W.state = 'IDLE'; V.setSprite('正面.png', false); return; }
-        V.W.x += V.W.dir * 2.2;
-        V.root.style.left = Math.max(60, Math.min(innerWidth - 60, V.W.x)) + 'px';
-      }, 40);
-      return;
-    }
+    if (mode === 'follow') return; // 跟随由下方专用平滑循环接管
     // walk
     V.W.state = 'WALK';
     V.W.dir = Math.random() < 0.5 ? -1 : 1;
@@ -97,6 +86,22 @@
       if (++i > steps) { clearInterval(t); V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
     }, 40);
   }, 9000 + Math.random() * 8000);
+
+  // follow 专用平滑循环：独立于散步调度器，随时响应鼠标（80ms 一帧）
+  setInterval(() => {
+    if (mode !== 'follow' || !isActive()) return;
+    if (followX == null || chatOpen()) return;
+    const dx = followX - V.W.x;
+    if (Math.abs(dx) <= 16) {
+      if (V.W.state === 'FOLLOW') { V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
+      return;
+    }
+    V.W.dir = dx > 0 ? 1 : -1;
+    V.W.state = 'FOLLOW';
+    V.setSprite('侧面.png', V.W.dir > 0);
+    V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 2.5));
+    V.root.style.left = V.W.x + 'px';
+  }, 80);
 
   // ---- 信件派发（background 独家）----
   function chatAppendIfOpen(who, text) {
