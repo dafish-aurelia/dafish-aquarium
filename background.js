@@ -104,6 +104,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
       switch (msg.type) {
+        case 'PET_QUERY_STATE': {
+          // 内容脚本冷启动竞态的拉取兜底：直接回答"你是否是活跃投影"
+          const { enabled = true } = await chrome.storage.local.get('enabled');
+          sendResponse({ active: !!sender.tab && sender.tab.id === prevActiveTabId, enabled });
+          break;
+        }
         case 'MAILBOX_HEALTH': {
           try { sendResponse({ ok: (await mbJson('/health')).ok === true }); }
           catch (e) { sendResponse({ ok: false }); }
