@@ -98,4 +98,20 @@
       renderVisible();
     }
   });
+
+  // 拉取式兜底（P0 竞态修复）：推送可能在监听注册前到达而丢失，
+  // 醒来后主动向 background 查询一次真实状态；SW 冷启动慢时再补一枪。
+  function queryState() {
+    try {
+      const p = chrome.runtime.sendMessage({ type: 'PET_QUERY_STATE' });
+      Promise.resolve(p).then((s) => {
+        if (!s) return;
+        if (typeof s.active === 'boolean') S.active = s.active;
+        if (typeof s.enabled === 'boolean') S.enabled = s.enabled;
+        renderVisible();
+      }).catch(() => {});
+    } catch (e) { /* 扩展上下文重载中的瞬态错误，忽略 */ }
+  }
+  queryState();
+  setTimeout(queryState, 900);
 })();

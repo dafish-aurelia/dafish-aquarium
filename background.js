@@ -49,29 +49,45 @@ chrome.action.onClicked.addListener(async () => {
   }
 });
 
-// 独家收信：MV3 alarm 心跳（30s），配合事件触发，pet.js 一律不自己拉信箱
+// 独家收信：长轮询循环（信到秒推）。alarm 仅作看门狗，循环死了就拉起来。
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create('pet-poll', { periodInMinutes: 0.5 });
+  chrome.alarms.create('pet-poll', { periodInMinutes: 1 });
 });
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== 'pet-poll' || activeTabGone()) return;
-  const { enabled = true } = await chrome.storage.local.get('enabled');
-  if (!enabled || prevActiveTabId == null) return;
-  try {
-    const res = await mbJson('/api/inbox');
-    for (const m of res.messages || []) {
-      chrome.tabs.sendMessage(prevActiveTabId, {
-        type: 'PET_MESSAGE',
-        kind: m.type,
-        text: m.text || '',
-      }).catch(() => {});
-    }
-  } catch (e) { /* 信局不在家：她自有离线姿态，绝不外露错误 */ }
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'pet-poll') startInboxLoop();
 });
 
-function activeTabGone() {
-  return prevActiveTabId == null;
+let inboxLoopRunning = false;
+async function inboxLoop() {
+  if (inboxLoopRunning) return;
+  inboxLoopRunning = true;
+  try {
+    while (true) {
+      const { enabled = true } = await chrome.storage.local.get('enabled');
+      if (!enabled || prevActiveTabId == null) {
+        await new Promise((r) => setTimeout(r, 3000));
+        continue;
+      }
+      try {
+        const base = await mailboxBase();
+        const r = await fetch(base + '/api/inbox?wait=25'); // 长轮询：挂起等信，最长25秒
+        const data = await r.json();
+        for (const m of data.messages || []) {
+          chrome.tabs.sendMessage(prevActiveTabId, {
+            type: 'PET_MESSAGE',
+            kind: m.type,
+            text: m.text || '',
+          }).catch(() => {});
+        }
+      } catch (e) {
+        await new Promise((r) => setTimeout(r, 5000)); // 信局不在家：低频重试
+      }
+    }
+  } finally {
+    inboxLoopRunning = false;
+  }
 }
+startInboxLoop();
 
 async function mailboxBase() {
   const { mailboxPort } = await chrome.storage.local.get('mailboxPort');

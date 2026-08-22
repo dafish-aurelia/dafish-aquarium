@@ -24,6 +24,7 @@ from pathlib import Path
 PORT = 13140
 BASE_DIR = Path(__file__).resolve().parents[3] / 'data' / 'pet-mailbox'
 LOCK = threading.Lock()
+MSG_COND = threading.Condition()  # 长轮询唤醒器：inject 后 notify，取信请求立即返回
 TZ = timezone(timedelta(hours=8))
 HEARTBEAT_TTL = timedelta(minutes=15)
 
@@ -110,6 +111,19 @@ def _call_standin_llm(user_text):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _pop_inbox(self):
+        """原子弹出全部待投递消息（锁内读+改名）。"""
+        inbox = BASE_DIR / 'inbox.jsonl'
+        with LOCK:
+            msgs = []
+            if inbox.exists():
+                lines = inbox.read_text(encoding='utf-8').strip().splitlines()
+                consumed = inbox.with_name('inbox.consumed.jsonl')
+                inbox.rename(consumed)  # 原子移走：并发取信不可能重复
+                msgs = [json.loads(l) for l in lines if l.strip()]
+                consumed.unlink()
+            return msgs
+
     def _json(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode('utf-8')
         self.send_response(code)
@@ -119,20 +133,27 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        path = self.path.split('?')[0]
+        parts = self.path.split('?')
+        path = parts[0]
+        query = parts[1] if len(parts) > 1 else ''
         inbox = BASE_DIR / 'inbox.jsonl'
         outbox = BASE_DIR / 'outbox.jsonl'
         if path == '/health':
             self._json(200, {'ok': True, 'ts': _now(), 'fish_online': _fish_online()})
         elif path == '/api/inbox':
-            with LOCK:
-                msgs = []
-                if inbox.exists():
-                    lines = inbox.read_text(encoding='utf-8').strip().splitlines()
-                    consumed = inbox.with_name('inbox.consumed.jsonl')
-                    inbox.rename(consumed)  # 原子移走：并发取信不可能重复
-                    msgs = [json.loads(l) for l in lines if l.strip()]
-                    consumed.unlink()
+            # 长轮询：?wait=秒数 —— 没有信件时挂起等待，inject 会唤醒（实时推送）
+            wait_s = 0.0
+            for kv in query.split('&'):
+                if kv.startswith('wait='):
+                    try:
+                        wait_s = min(float(kv[5:]), 30.0)
+                    except ValueError:
+                        pass
+            msgs = self._pop_inbox()
+            if not msgs and wait_s > 0:
+                with MSG_COND:
+                    MSG_COND.wait(wait_s)
+                msgs = self._pop_inbox()
             self._json(200, {'ok': True, 'messages': msgs})
         elif path.startswith('/api/outbox/since/'):
             try:
@@ -173,6 +194,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/inject':
             msg = {'id': _next_id(), 'ts': _now(), **payload}
             _append(inbox, msg)
+            with MSG_COND:
+                MSG_COND.notify_all()
             return self._json(200, {'ok': True, 'id': msg['id']})
 
         if path == '/api/outbox':

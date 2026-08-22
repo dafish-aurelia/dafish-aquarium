@@ -11,6 +11,35 @@
     const r = V.img.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
+
+  // ---- 摸头：按住她 0.7 秒不动 = 摸头（VPet 式触感）----
+  const TOUCH_LINES = [
+    '唔……主、主人在摸哪里啦！',
+    '再摸就要化掉了……',
+    '咕噜噜……（耳朵红了）',
+    '摸头杀是不行的……好吧再摸一下。',
+    '本鱼的头很圆，很好摸对吧。（骄傲）',
+  ];
+  let pressTimer = null;
+  let touched = false;
+  V.img.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    touched = false;
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      if (!moved && dragging) {
+        touched = true;
+        V.showBubble(TOUCH_LINES[Math.floor(Math.random() * TOUCH_LINES.length)], 4500);
+        V.floatHearts(3);
+        addIntimacy(1);
+        refreshIntimacy();
+      }
+    }, 700);
+  });
+  const clearTouch = () => clearTimeout(pressTimer);
+  V.img.addEventListener('pointerup', clearTouch);
+  V.img.addEventListener('pointercancel', clearTouch);
+
   V.img.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     dragging = true; moved = false; dizzyArmed = false;
@@ -53,9 +82,9 @@
   V.img.addEventListener('pointerup', endDrag);
   V.img.addEventListener('pointercancel', () => { dragging = false; });
 
-  // 单击 = 蹦跳吐槽；双击 = 投喂台
+  // 单击 = 蹦跳吐槽；双击 = 投喂台（摸头后的那次点击不触发）
   V.img.addEventListener('click', () => {
-    if (moved) return;
+    if (moved || touched) { touched = false; return; }
     V.setSprite('正面.png', false);
     V.hop();
     V.showBubble(B.pickQuip(), 3500);

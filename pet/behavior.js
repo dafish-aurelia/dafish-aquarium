@@ -9,8 +9,10 @@
   let lastDeep = 0;
   let tabSwitchAt = 0;
   let lastHeart = Date.now();
+  let lastActivity = Date.now();
   let mode = 'walk'; // walk | follow | still
   let followX = null;
+  let followY = null;
   let greeted = false;
   const CD_GLOBAL = 300e3, CD_DEEP = 900e3, CD_TAB = 10e3;
 
@@ -59,7 +61,58 @@
   }
   chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) { mode = pet_mode; V.W.mode = pet_mode; } });
 
-  document.addEventListener('pointermove', (e) => { if (mode === 'follow') followX = e.clientX; });
+  document.addEventListener('pointermove', (e) => {
+    followX = e.clientX;
+    followY = e.clientY;
+    // 主人长时间没动静 → 她打瞌睡；一有动静就醒
+    if (V.W.state === 'SLEEP') {
+      V.W.state = 'IDLE';
+      V.showBubble('唔……本鱼醒了。', 3000);
+    }
+  });
+
+  // ---- 打瞌睡：主人10分钟没动静，她也睡着（呼。。。）----
+  setInterval(() => {
+    if (!isActive() || chatOpen() || isHome()) return;
+    const idleFor = Date.now() - lastActivity;
+    if (idleFor > 10 * 60e3 && V.W.state !== 'SLEEP') {
+      V.W.state = 'SLEEP';
+      V.setSprite('正面.png', false);
+      V.showHeart('呼。。。呼。。。', 5000);
+    } else if (V.W.state === 'SLEEP' && Math.random() < 0.5) {
+      V.showHeart(pick(['呼。。。', '哈。。。呼。。。', '呼。。。呼。。。呼。。。']), 3500);
+    }
+  }, 30e3);
+
+  // follow 专用平滑循环：独立于散步调度器，随时响应鼠标（80ms 一帧）
+  setInterval(() => {
+    if (mode !== 'follow') {
+      if (V.W.state === 'FOLLOW') V.W.state = 'IDLE'; // 自愈：模式切走后复位残留
+      return;
+    }
+    if (!isActive()) return;
+    // 二维跟随：横纵都追，三视图按方向切换
+    const tx = Math.max(60, Math.min(innerWidth - 60, followX ?? V.W.x));
+    const tby = Math.max(0, Math.min(innerHeight - 170, innerHeight - (followY ?? innerHeight / 2) - 75));
+    const curBy = parseInt(V.root.style.bottom, 10) || 0;
+    const dx = tx - V.W.x;
+    const dby = tby - curBy;
+    if (Math.abs(dx) <= 14 && Math.abs(dby) <= 14) {
+      if (V.W.state === 'FOLLOW') { V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
+      return;
+    }
+    V.W.state = 'FOLLOW';
+    if (Math.abs(dx) >= Math.abs(dby)) {
+      V.W.dir = dx > 0 ? 1 : -1;
+      V.setSprite('侧面.png', V.W.dir > 0);
+      V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 3));
+    } else {
+      const up = dby > 0; // bottom 增大 = 往上游
+      V.setSprite(up ? '背面.png' : '正面.png', false);
+      V.root.style.bottom = Math.max(0, Math.min(innerHeight - 170, curBy + Math.sign(dby) * 3)) + 'px';
+    }
+    V.root.style.left = V.W.x + 'px';
+  }, 80);
 
   // 鼠标靠近时暂停散步：站好让人家点，别边走边躲
   V.root.addEventListener('mouseenter', () => { V.W.paused = true; });
