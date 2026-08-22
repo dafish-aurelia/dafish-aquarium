@@ -81,7 +81,7 @@ def test_bad_path_404(base):
 def test_deep_chat_routed_to_fish_when_online(base, tmp_path, monkeypatch):
     now = datetime.datetime.now(pm.TZ).isoformat(timespec='seconds')
     (tmp_path / 'heartbeat.txt').write_text(now, encoding='utf-8')
-    monkeypatch.setattr(pm, '_call_standin_llm', lambda t: '不该被调用')
+    monkeypatch.setattr(pm, '_call_standin_llm', lambda t: ('不该被调用', None))
 
     r = post(base, '/api/deep_chat', {'type': 'deep_chat', 'text': '在吗'})
     assert r['mode'] == 'fish'
@@ -92,7 +92,7 @@ def test_deep_chat_routed_to_fish_when_online(base, tmp_path, monkeypatch):
 
 
 def test_deep_chat_standin_when_offline(base, tmp_path, monkeypatch):
-    monkeypatch.setattr(pm, '_call_standin_llm', lambda t: '代班小鱼在岗')
+    monkeypatch.setattr(pm, '_call_standin_llm', lambda t: ('代班小鱼在岗', None))
 
     r = post(base, '/api/deep_chat', {'type': 'deep_chat', 'text': '在吗'})
     assert r['mode'] == 'standin'
