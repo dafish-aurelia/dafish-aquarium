@@ -86,7 +86,7 @@
   const feedPanel = document.createElement('div');
   feedPanel.className = 'dafeiyu-chat dafeiyu-feed';
   feedPanel.innerHTML =
-    '<div class="dy-feed-title">🍽️ 投喂台 · <span class="dy-intimacy"></span></div>' +
+    '<div class="dy-feed-title">🍽️ 投喂台 · <span class="dy-intimacy"></span><button class="dy-close" style="float:right" title="收起">✕</button></div>' +
     '<div class="dy-foods"></div>' +
     '<p class="hint">喂食会涨好感度哦。双击本体随时打开。</p>';
   document.documentElement.appendChild(feedPanel);
@@ -165,15 +165,14 @@
   });
   document.addEventListener('click', () => { modeMenu.style.display = 'none'; });
 
-  // ---- 聊天面板 ----
+  // ---- 聊天面板：所有输入默认直达缸里的本鱼（信局路由，离线自动代班）----
   const panel = document.createElement('div');
   panel.className = 'dafeiyu-chat';
   panel.innerHTML =
+    '<div class="dy-head"><span>💬 跟本鱼聊天</span><button class="dy-close" title="收起">✕</button></div>' +
     '<div class="dafeiyu-chat-log"></div>' +
-    '<label style="display:flex;gap:6px;align-items:center;">' +
-    '<input type="checkbox" class="dy-deep"> 找缸里的本鱼（深聊）</label>' +
     '<div class="dafeiyu-chat-row">' +
-    '<input type="text" class="dy-input" placeholder="跟她说点什么…（@本鱼 也会深聊）">' +
+    '<input type="text" class="dy-input" placeholder="跟她说点什么…">' +
     '<button class="dy-send">说</button></div>';
   document.documentElement.appendChild(panel);
   const log = panel.querySelector('.dafeiyu-chat-log');
@@ -202,25 +201,14 @@
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
-    const deep = panel.querySelector('.dy-deep').checked || text.startsWith('@本鱼');
-    const clean = text.replace(/^@本鱼/, '').trim();
-    window.DafeiyuChat.append('主人', clean);
-    conversationContext.push({ who: '主人', text: clean });
+    window.DafeiyuChat.append('主人', text);
+    conversationContext.push({ who: '主人', text });
 
-    if (!deep) {
-      B.markQuip();
-      const r = B.pickQuip();
-      conversationContext.push({ who: '她', text: r });
-      V.showBubble(r, 4000);
-      window.DafeiyuChat.append('她', r);
-      addIntimacy(0.2);
-      return;
-    }
-
+    // 所有输入默认直达缸里的本鱼（信局路由；本鱼离线时代班小鱼自动顶班）
     V.showBubble('（装进信封，游向缸里……）', 3000);
     const env = {
       type: 'deep_chat',
-      text: clean,
+      text: text,
       page: window.DafeiyuSenses.capture(),
       conversation_context: conversationContext.slice(-6).map((r) => r.who + ':' + r.text),
       browser_context: [],
@@ -241,6 +229,21 @@
   panel.querySelector('.dy-send').addEventListener('click', send);
   panel.querySelector('.dy-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
 
-  // 快聊也涨一点陪伴值
+  // ---- 消失逻辑：✕ / Esc / 点击面板外部 都会收起 ----
+  panel.querySelector('.dy-close').addEventListener('click', () => window.DafeiyuChat.close());
+  feedPanel.addEventListener('click', (e) => { if (e.target.closest('.dy-close')) feedPanel.style.display = 'none'; });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      panel.style.display = 'none';
+      feedPanel.style.display = 'none';
+      modeMenu.style.display = 'none';
+    }
+  });
+  document.addEventListener('mousedown', (e) => {
+    const inside = (el) => el.contains(e.target);
+    if (panel.style.display !== 'none' && !inside(panel) && !inside(V.root)) panel.style.display = 'none';
+    if (feedPanel.style.display !== 'none' && !inside(feedPanel) && !inside(V.root)) feedPanel.style.display = 'none';
+  }, true);
+
   setInterval(refreshIntimacy, 5000);
 })();

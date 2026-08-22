@@ -90,7 +90,7 @@
       V.root.style.left = V.W.x + 'px';
       if (++i > steps) { clearInterval(t); V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
     }, 40);
-  }, 9000 + Math.random() * 8000);
+  }, 4000 + Math.random() * 5000);
 
   // follow 专用平滑循环：独立于散步调度器，随时响应鼠标（80ms 一帧）
   setInterval(() => {
