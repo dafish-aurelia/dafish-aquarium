@@ -13,6 +13,29 @@
   -webkit-user-drag: none;
   touch-action: none;
 }
+
+/* ---- 心情徽章：她当前所处场景/情绪 ---- */
+#dafeiyu-root .dafeiyu-badge {
+  position: absolute;
+  top: -14px;
+  right: -6px;
+  font-size: 16px;
+  filter: drop-shadow(0 2px 4px rgba(0, 30, 60, 0.3));
+  pointer-events: none;
+}
+
+/* ---- 程序化表情预设（叠加在 sprite 上，自动消退）---- */
+.dafeiyu-sprite.dy-emo-shy {
+  filter: hue-rotate(-18deg) saturate(1.4) brightness(1.07)
+    drop-shadow(0 0 10px rgba(255, 150, 170, 0.55));
+}
+.dafeiyu-sprite.dy-emo-sleepy {
+  transform: rotate(7deg) translateY(5px);
+  filter: brightness(0.85) saturate(0.8);
+}
+.dafeiyu-sprite.dy-emo-think { transform: rotate(-6deg); }
+.dafeiyu-sprite.dy-emo-worry { filter: saturate(0.55) brightness(0.92); }
+.dafeiyu-sprite.dy-emo-happy { filter: brightness(1.1) saturate(1.25); }
 #dafeiyu-root .dafeiyu-bubble {
   position: absolute;
   bottom: calc(100% + 8px);

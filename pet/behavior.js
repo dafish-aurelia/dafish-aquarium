@@ -34,7 +34,26 @@
   fetch(chrome.runtime.getURL('quip_heart.json')).then((r) => r.json()).then((q) => { hearts = q; }).catch(() => {});
 
   function pick(arr) { return arr.length ? arr[Math.floor(Math.random() * arr.length)] : ''; }
-  function pickQuip() { return pick(quips) || '咕噜噜……'; }
+
+  // 场景感知台词：70% 说应景的话（工作/看剧/摸鱼），30% 用通用池
+  function pickQuip() {
+    const scene = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
+    const sceneQuips = (quips && typeof quips === 'object' && !Array.isArray(quips)) ? quips : null;
+    if (sceneQuips) {
+      const pool = sceneQuips[scene] || [];
+      if (pool.length && Math.random() < 0.7) return pick(pool);
+      return pick(sceneQuips.generic) || '咕噜噜……';
+    }
+    return pick(Array.isArray(quips) ? quips : []);
+  }
+
+  // 心情徽章跟随场景刷新（☀️摸鱼 💼工作 🍿看剧 🏠在家）
+  const SCENE_BADGE = { chill: '☀️', work: '💼', video: '🍿', home: '🏠', sleepy: '💤' };
+  setInterval(() => {
+    const s = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
+    if (V.W.state === 'SLEEP') V.setBadge('💤');
+    else V.setBadge(SCENE_BADGE[s] || '☀️');
+  }, 10e3);
 
   // ---- HOME：水缸主页是家 ----
   function isHome() {

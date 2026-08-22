@@ -11,6 +11,10 @@
     '<button data-act="chat" title="找她聊天">💬</button>' +
     '<button data-act="feed" title="喂食">🍪</button>' +
     '<button data-act="gear" title="大小">⚙️</button>';
+  const badge = document.createElement('span');
+  badge.className = 'dafeiyu-badge';
+  badge.textContent = '☀️';
+  badge.title = '她现在的心情';
   const bubble = document.createElement('div');
   bubble.className = 'dafeiyu-bubble';
   bubble.style.display = 'none';
@@ -20,7 +24,7 @@
   const img = document.createElement('img');
   img.className = 'dafeiyu-sprite';
   img.src = SPR('正面.png');
-  root.append(toolbar, bubble, heart, img);
+  root.append(badge, toolbar, bubble, heart, img);
   document.documentElement.appendChild(root);
 
   const W = { x: Math.max(60, innerWidth - 140), dir: -1, state: 'IDLE', online: false, mode: 'walk' };
@@ -78,9 +82,33 @@
         setTimeout(() => h.remove(), 1600);
       }
     },
+    // ---- 表情系统：程序化情绪预设（无新素材，纯 CSS 滤镜/变换）----
+    setBadge(emoji) { badge.textContent = emoji || '☀️'; },
+    setEmotion(name, ms = 2600) {
+      const ALL = ['dy-emo-shy', 'dy-emo-sleepy', 'dy-emo-think', 'dy-emo-worry', 'dy-emo-happy'];
+      ALL.forEach((c) => img.classList.remove(c));
+      if (name && ALL.includes('dy-emo-' + name)) {
+        img.classList.add('dy-emo-' + name);
+        clearTimeout(img._emoT);
+        if (ms > 0) img._emoT = setTimeout(() => img.classList.remove('dy-emo-' + name), ms);
+      }
+    },
     renderVisible,
   };
   window.DafeiyuView = DafeiyuView;
+
+  // 微生命：随机眨眼（轻微压扁一瞬）
+  (function blinkLoop() {
+    setTimeout(() => {
+      if (!document.hidden && window.__dafeiyuVisible) {
+        img.animate(
+          [{ transform: 'scaleY(1)' }, { transform: 'scaleY(0.94)' }, { transform: 'scaleY(1)' }],
+          { duration: 130, easing: 'ease-in-out' }
+        );
+      }
+      blinkLoop();
+    }, 2800 + Math.random() * 3200);
+  })();
 
   chrome.storage.local.get(['enabled', 'pet_scale']).then(({ enabled = true, pet_scale = 1 }) => {
     S.enabled = enabled;

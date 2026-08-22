@@ -1,6 +1,9 @@
 (() => {
+  // 场景感知 L0：按域名判断主人正在干嘛（收编自昨天版 content.js 的场景正则）
+  const WORK = /(^|\.)github\.com$|(^|\.)stackoverflow\.com$|(^|\.)gitee\.com$|(^|\.)juejin\.cn$|(^|\.)csdn\.net$/;
+  const VIDEO = /(^|\.)bilibili\.com$|(^|\.)youtube\.com$|(^|\.)iqiyi\.com$|(^|\.)youku\.com$|(^|\.)netflix\.com$/;
+
   window.DafeiyuSenses = {
-    // v1 仅 L0：标题 + 脱敏后的 URL（丢 query/fragment）。不看表单、不看正文。
     capture() {
       const s = window.DafeiyuSanitize.sanitizeUrl(location.href);
       return {
@@ -9,6 +12,16 @@
         origin: s.origin,
         domain: s.domain,
       };
+    },
+    scene() {
+      try {
+        const h = location.hostname;
+        if (WORK.test(h)) return 'work';
+        if (VIDEO.test(h)) return 'video';
+        if (decodeURIComponent(location.href)
+          .startsWith('file:///G:/life/Aurelia的工作区/browser/start.html')) return 'home';
+      } catch (e) { /* 忽略 */ }
+      return 'chill';
     },
   };
 })();

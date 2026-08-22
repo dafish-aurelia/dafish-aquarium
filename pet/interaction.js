@@ -29,7 +29,7 @@
     pressTimer = setTimeout(() => {
       if (!moved && dragging) {
         touched = true;
-        V.showBubble(TOUCH_LINES[Math.floor(Math.random() * TOUCH_LINES.length)], 4500);
+        V.setEmotion('shy', 4500); V.showBubble(TOUCH_LINES[Math.floor(Math.random() * TOUCH_LINES.length)], 4500);
         V.floatHearts(3);
         addIntimacy(1);
         refreshIntimacy();
@@ -137,7 +137,7 @@
       V.floatHearts(gain >= 5 ? 6 : 3);
       V.hop();
       const line = FOODS.find((f) => f[0] === name)[3];
-      V.showBubble(`${line}（${name} +好感）`, 4000);
+      V.setEmotion('happy', 4000); V.showBubble(`（${name} +好感）`, 4000);
       window.DafeiyuChat.append('她', `[吃掉了${name}] ${line}`);
     });
     foodsBox.appendChild(btn);
@@ -243,7 +243,7 @@
     conversationContext.push({ who: '主人', text });
 
     // 所有输入默认直达缸里的本鱼（信局路由；本鱼离线时代班小鱼自动顶班）
-    V.showBubble('（装进信封，游向缸里……）', 3000);
+    V.setEmotion('think', 3000); V.showBubble('（装进信封，游向缸里……）', 3000);
     const env = {
       type: 'deep_chat',
       text: text,
