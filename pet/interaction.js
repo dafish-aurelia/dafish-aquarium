@@ -53,12 +53,17 @@
   V.img.addEventListener('pointerup', endDrag);
   V.img.addEventListener('pointercancel', () => { dragging = false; });
 
-  // 单击 = 蹦跳吐槽；双击 = 喂食面板
+  // 单击 = 蹦跳吐槽；双击 = 投喂台
   V.img.addEventListener('click', () => {
     if (moved) return;
     V.setSprite('正面.png', false);
     V.hop();
     V.showBubble(B.pickQuip(), 3500);
+  });
+  V.img.addEventListener('dblclick', () => {
+    window.DafeiyuChat.close(); // 面板互斥
+    refreshIntimacy();
+    feedPanel.style.display = feedPanel.style.display === 'flex' ? 'none' : 'flex';
   });
 
   // ---- 好感度 ----
@@ -120,11 +125,15 @@
     const act = e.target?.dataset?.act;
     if (!act) return;
     e.stopPropagation();
-    if (act === 'chat') window.DafeiyuChat.open();
+    if (act === 'chat') {
+      feedPanel.style.display = 'none'; // 面板互斥
+      window.DafeiyuChat.open();
+    }
     if (act === 'feed') {
+      const showing = feedPanel.style.display === 'flex';
+      window.DafeiyuChat.close(); // 面板互斥
       refreshIntimacy();
-      feedPanel.style.display = feedPanel.style.display === 'flex' ? 'none' : 'flex';
-      window.DafeiyuChat && (window.DafeiyuChat.close ? window.DafeiyuChat.close() : null);
+      feedPanel.style.display = showing ? 'none' : 'flex';
     }
     if (act === 'gear') {
       sizeIdx = (sizeIdx + 1) % SIZES.length;
