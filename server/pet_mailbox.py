@@ -15,6 +15,7 @@
 import json
 import os
 import sys
+import time
 import threading
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -133,6 +134,15 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        try:
+            self._handle_get()
+        except Exception as e:  # noqa: BLE001 —— 单请求崩溃不拖垮信局
+            try:
+                self._json(500, {'error': str(e)})
+            except Exception:
+                pass
+
+    def _handle_get(self):
         parts = self.path.split('?')
         path = parts[0]
         query = parts[1] if len(parts) > 1 else ''
@@ -177,6 +187,15 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {'error': 'not found'})
 
     def do_POST(self):
+        try:
+            self._handle_post()
+        except Exception as e:  # noqa: BLE001 —— 单请求崩溃不拖垮信局
+            try:
+                self._json(500, {'error': str(e)})
+            except Exception:
+                pass
+
+    def _handle_post(self):
         n = int(self.headers.get('Content-Length', 0) or 0)
         path = self.path.split('?')[0]
         if path == '/api/heartbeat':
@@ -226,9 +245,18 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
     BASE_DIR.mkdir(parents=True, exist_ok=True)
-    srv = ThreadingHTTPServer(('127.0.0.1', port), Handler)
-    print(f'[pet-mailbox] listening on 127.0.0.1:{port} data={BASE_DIR}', flush=True)
-    srv.serve_forever()
+    while True:  # 自动重生：信局崩溃后 2 秒原地复活
+        try:
+            srv = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+            print(f'[pet-mailbox] listening on 127.0.0.1:{port} data={BASE_DIR}', flush=True)
+            srv.serve_forever()
+        except OSError as e:
+            # 端口被占等硬错误：报给 Harness，不无限空转
+            print(f'[pet-mailbox] fatal: {e}', flush=True)
+            sys.exit(1)
+        except Exception as e:  # noqa: BLE001
+            print(f'[pet-mailbox] crashed ({e}), restarting in 2s...', flush=True)
+            time.sleep(2)
 
 
 if __name__ == '__main__':
