@@ -157,18 +157,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         n = int(self.headers.get('Content-Length', 0) or 0)
-        try:
-            payload = json.loads(self.rfile.read(n).decode('utf-8'))
-        except Exception:
-            return self._json(400, {'error': 'bad json'})
         path = self.path.split('?')[0]
-        inbox = BASE_DIR / 'inbox.jsonl'
-        outbox = BASE_DIR / 'outbox.jsonl'
-
         if path == '/api/heartbeat':
+            # 心跳允许空身体
             BASE_DIR.mkdir(parents=True, exist_ok=True)
             (BASE_DIR / 'heartbeat.txt').write_text(_now(), encoding='utf-8')
             return self._json(200, {'ok': True})
+        try:
+            payload = json.loads(self.rfile.read(n).decode('utf-8')) if n else {}
+        except Exception:
+            return self._json(400, {'error': 'bad json'})
+        inbox = BASE_DIR / 'inbox.jsonl'
+        outbox = BASE_DIR / 'outbox.jsonl'
 
         if path == '/api/inject':
             msg = {'id': _next_id(), 'ts': _now(), **payload}
