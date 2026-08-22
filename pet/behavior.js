@@ -61,8 +61,12 @@
 
   document.addEventListener('pointermove', (e) => { if (mode === 'follow') followX = e.clientX; });
 
+  // 鼠标靠近时暂停散步：站好让人家点，别边走边躲
+  V.root.addEventListener('mouseenter', () => { V.W.paused = true; });
+  V.root.addEventListener('mouseleave', () => { V.W.paused = false; });
+
   setInterval(() => {
-    if (!isActive() || V.W.state !== 'IDLE' || chatOpen()) return;
+    if (!isActive() || V.W.state !== 'IDLE' || chatOpen() || V.W.paused) return;
     if (isHome()) {
       V.W.state = 'SWAY';
       const base = parseInt(V.root.style.left, 10) || V.W.x;
