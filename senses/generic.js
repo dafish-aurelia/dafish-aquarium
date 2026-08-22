@@ -1,7 +1,58 @@
 (() => {
-  // 场景感知 L0：按域名判断主人正在干嘛（收编自昨天版 content.js 的场景正则）
+  // 场景感知：L0 域名场景 + L1 内容签名（视频/小说，仅白名单站点提取标题与有限摘录）
   const WORK = /(^|\.)github\.com$|(^|\.)stackoverflow\.com$|(^|\.)gitee\.com$|(^|\.)juejin\.cn$|(^|\.)csdn\.net$/;
   const VIDEO = /(^|\.)bilibili\.com$|(^|\.)youtube\.com$|(^|\.)iqiyi\.com$|(^|\.)youku\.com$|(^|\.)netflix\.com$/;
+  const NOVEL = /(^|\.)qidian\.com$|(^|\.)jjwxc\.net$|(^|\.)69shu\.(com|net)$|(^|\.)sfacg\.com$|(^|\.)ciweimao\.com$|(^|\.)zongheng\.com$/;
+
+  function homeNow() {
+    try {
+      return decodeURIComponent(location.href)
+        .startsWith('file:///G:/life/Aurelia的工作区/browser/start.html');
+    } catch (e) { return false; }
+  }
+
+  function scene() {
+    try {
+      const h = location.hostname;
+      if (WORK.test(h)) return 'work';
+      if (VIDEO.test(h)) return 'video';
+      if (NOVEL.test(h)) return 'novel';
+      if (homeNow()) return 'home';
+    } catch (e) { /* 忽略 */ }
+    return 'chill';
+  }
+
+  // 内容签名：只在视频/小说白名单站点提取，摘录上限 160 字符
+  function content() {
+    const s = scene();
+    try {
+      if (s === 'video') {
+        const el = document.querySelector(
+          'ytd-watch-metadata #title, h1.title, .video-title, .video-info-title h1, h1');
+        const vids = [...document.querySelectorAll('video')];
+        const playing = vids.some((v) => !v.paused && !v.ended && v.currentTime > 0);
+        return {
+          kind: 'video',
+          title: ((el && el.textContent) || document.title || '').trim().slice(0, 80),
+          playing,
+          excerpt: '',
+        };
+      }
+      if (s === 'novel') {
+        const t = document.querySelector('.chapter-title, h2, h1, #bookName, .book-title');
+        const paras = [...document.querySelectorAll('p')]
+          .map((p) => (p.textContent || '').trim())
+          .filter((x) => x.length > 30);
+        return {
+          kind: 'novel',
+          title: ((t && t.textContent) || document.title || '').trim().slice(0, 60),
+          playing: null,
+          excerpt: (paras[0] || '').slice(0, 160),
+        };
+      }
+    } catch (e) { /* 忽略 */ }
+    return { kind: null, title: (document.title || '').slice(0, 80), playing: null, excerpt: '' };
+  }
 
   window.DafeiyuSenses = {
     capture() {
@@ -13,15 +64,8 @@
         domain: s.domain,
       };
     },
-    scene() {
-      try {
-        const h = location.hostname;
-        if (WORK.test(h)) return 'work';
-        if (VIDEO.test(h)) return 'video';
-        if (decodeURIComponent(location.href)
-          .startsWith('file:///G:/life/Aurelia的工作区/browser/start.html')) return 'home';
-      } catch (e) { /* 忽略 */ }
-      return 'chill';
-    },
+    scene,
+    homeNow,
+    content,
   };
 })();

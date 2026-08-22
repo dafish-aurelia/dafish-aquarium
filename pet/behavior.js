@@ -184,6 +184,38 @@
     V.root.style.left = V.W.x + 'px';
   }, 80);
 
+  // ---- 内容感知陪伴：新视频/新章节 → 本地模板即时反应 + 事件上报给缸里的本鱼 ----
+  let lastSig = '';
+  setInterval(() => {
+    if (!isActive() || !window.DafeiyuSenses) return;
+    let c;
+    try { c = window.DafeiyuSenses.content(); } catch (e) { return; }
+    if (!c || !c.kind || !c.title) return;
+    const sig = c.kind + '|' + c.title;
+    if (sig === lastSig) return;
+    const first = lastSig === '';
+    lastSig = sig;
+
+    // 本地即时反应：模板填真实标题（80%概率，聊天中不打扰）
+    if (!chatOpen() && Math.random() < 0.8) {
+      const tplPool = (quips && quips[c.kind + '_tpl']) || [];
+      if (tplPool.length) {
+        const line = pick(tplPool).replace(/\{title\}/g, c.title);
+        V.showBubble(line, 5200, c.kind === 'video' ? 'happy' : 'think');
+      }
+    }
+    // 事件上报（首次注入页面时不上报，避免每次刷新都打扰本鱼）
+    if (!first) {
+      window.DafeiyuMailbox.outbox({
+        type: 'browser_event',
+        kind: c.kind,
+        title: c.title,
+        origin: location.origin,
+        excerpt: (c.excerpt || '').slice(0, 160),
+      });
+    }
+  }, 10e3);
+
   // ---- 信件派发（background 独家）----
   function chatAppendIfOpen(who, text) {
     if (window.DafeiyuChat && window.DafeiyuChat.isOpen()) window.DafeiyuChat.append(who, text);

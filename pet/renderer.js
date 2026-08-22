@@ -44,7 +44,8 @@
       img.src = SPR(name);
       img.style.transform = flip ? 'scaleX(-1)' : '';
     },
-    showBubble(text, ms = 4000) {
+    showBubble(text, ms = 4000, emo) {
+      if (emo) DafeiyuView.setEmotion(emo, ms);
       bubble.classList.remove('dafeiyu-heart');
       bubble.textContent = text;
       bubble.style.display = 'block';
