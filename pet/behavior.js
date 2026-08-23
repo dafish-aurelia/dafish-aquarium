@@ -186,6 +186,7 @@
 
   // ---- 内容感知陪伴：新视频/新章节 → 本地模板即时反应 + 事件上报给缸里的本鱼 ----
   let lastSig = '';
+  const seenSigs = []; // 页面内存级去重：全量导航天然重置；SPA 换内容由签名变化触发
   setInterval(() => {
     if (!isActive() || !window.DafeiyuSenses) return;
     let c;
@@ -204,13 +205,13 @@
         V.showBubble(line, 5200, c.kind === 'video' ? 'happy' : 'think');
       }
     }
-    // 事件上报：同签名去重（浏览器会话级，storage.session），新内容必报
-    (async () => {
+    // 事件上报：同签名页面内去重，新内容必报。
+    // 不用 chrome.storage.session —— 它默认不对内容脚本开放（需后台 setAccessLevel 放行），
+    // 未放行时 get() 直接 reject 且被静默吞掉，v0.3.2~0.3.4 的 browser_event 因此从未真正上线。
+    if (!seenSigs.includes(sig)) {
+      seenSigs.push(sig);
+      if (seenSigs.length > 20) seenSigs.shift();
       try {
-        const { seenSigs = [] } = await chrome.storage.session.get({ seenSigs: [] });
-        if (seenSigs.includes(sig)) return;
-        seenSigs.push(sig);
-        await chrome.storage.session.set({ seenSigs: seenSigs.slice(-20) });
         window.DafeiyuMailbox.outbox({
           type: 'browser_event',
           kind: c.kind,
@@ -218,8 +219,8 @@
           origin: location.origin,
           excerpt: (c.excerpt || '').slice(0, 160),
         });
-      } catch (e) { /* 存储异常时静默 */ }
-    })();
+      } catch (e) { /* 信局不在家：静默，下个新内容再试 */ }
+    }
   }, 10e3);
 
   // ---- 信件派发（background 独家）----
