@@ -29,8 +29,11 @@ from pathlib import Path
 
 PORT = 13140
 BASE_DIR = Path(__file__).resolve().parents[3] / 'data' / 'pet-mailbox'
-LOCK = threading.Lock()
-MSG_COND = threading.Condition()  # 长轮询唤醒器：inject 后 notify，取信请求立即返回
+# 唤醒器与互斥共用同一把可重入锁（审查三轮并发项）：长轮询的"查空→挂起"
+# 与 inject 的"落信→notify"必须互斥同一临界区，否则 notify 可能落在
+# 查空之后、进入等待之前的缝隙里被永久丢失（信件迟到至多一个轮询周期）。
+LOCK = threading.RLock()
+MSG_COND = threading.Condition(LOCK)
 TZ = timezone(timedelta(hours=8))
 HEARTBEAT_TTL = timedelta(minutes=15)   # 本鱼心跳 TTL（读信桥当值期间每轮续命）
 PROJECTION_TTL = timedelta(minutes=5)   # 投影心跳 TTL（扩展 SW 每分钟续命）
@@ -270,11 +273,13 @@ class Handler(BaseHTTPRequestHandler):
                         wait_s = min(float(kv[5:]), 30.0)
                     except ValueError:
                         pass
-            msgs = self._pop_inbox()
-            if not msgs and wait_s > 0:
-                with MSG_COND:
-                    MSG_COND.wait(wait_s)
+            # 查空与挂起在同一把锁内完成（MSG_COND 包装 LOCK），
+            # inject 的 notify 不可能落进"已查空、未挂起"的缝隙
+            with MSG_COND:
                 msgs = self._pop_inbox()
+                if not msgs and wait_s > 0:
+                    MSG_COND.wait(wait_s)
+                    msgs = self._pop_inbox()
             self._json(200, {'ok': True, 'messages': msgs})
         elif path.startswith('/api/outbox/since/'):
             try:
@@ -331,8 +336,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == '/api/inject':
             msg = {'id': _next_id(), 'ts': _now(), **payload}
-            _append(inbox, msg)
-            with MSG_COND:
+            with MSG_COND:  # 落信与唤醒同临界区：等待者醒来必有信可取
+                _append(inbox, msg)
                 MSG_COND.notify_all()
             return self._json(200, {'ok': True, 'id': msg['id']})
 

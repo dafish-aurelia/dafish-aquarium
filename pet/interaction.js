@@ -129,7 +129,7 @@
   feedPanel.innerHTML =
     '<div class="dy-feed-title">🍽️ 投喂台 · <span class="dy-intimacy"></span><button class="dy-close" style="float:right" title="收起">✕</button></div>' +
     '<div class="dy-foods"></div>' +
-    '<p class="hint">喂食会涨好感度哦。双击本体随时打开。</p>';
+    '<p class="dy-hint">喂食会涨好感度哦。双击本体随时打开。</p>';
   document.documentElement.appendChild(feedPanel);
   const foodsBox = feedPanel.querySelector('.dy-foods');
   const intimacySpan = feedPanel.querySelector('.dy-intimacy');

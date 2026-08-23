@@ -129,6 +129,7 @@ async function postHeartbeat() {
   } catch (e) { /* 信局不在家：静默，等下个 alarm 再试 */ }
 }
 chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
+chrome.alarms.create('pet-poll', { periodInMinutes: 1 });      // 同上：收信看门狗一并补挂
 postHeartbeat();
 
 // 信局地址钉死（审查#11：mailboxPort 全工程无写入方，属幽灵配置，删除读取分支）
@@ -168,9 +169,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try {
       switch (msg.type) {
         case 'PET_QUERY_STATE': {
-          // 内容脚本冷启动竞态的拉取兜底：直接回答"你是否是活跃投影"
-          const { enabled = true } = await chrome.storage.local.get('enabled');
-          sendResponse({ active: !!sender.tab && sender.tab.id === prevActiveTabId, enabled });
+          // 拉取兜底：实时计算活跃 Tab，而非读 SW 重启即失忆的 prevActiveTabId
+          // 缓存 —— 否则 SW 冷启动后所有页面会隐身到下一次 Tab 事件才复活。
+          const [{ enabled = true }, tab] = await Promise.all([
+            chrome.storage.local.get('enabled'),
+            getActiveTab(),
+          ]);
+          const active = !!sender.tab && !!tab && sender.tab.id === tab.id;
+          if (active && sender.tab.id !== prevActiveTabId) {
+            prevActiveTabId = sender.tab.id; // 顺手自愈缓存游标
+          }
+          sendResponse({ active, enabled });
           break;
         }
         case 'MAILBOX_HEALTH': {

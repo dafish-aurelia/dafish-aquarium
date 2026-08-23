@@ -184,7 +184,9 @@
   font-size: 13px;
 }
 .dy-foods button:hover { background: rgba(120, 200, 255, 0.2); }
-.dy-foods button + .hint, .hint { font-size: 11px; color: #56789a; margin: 2px 0 0; }
+/* 审查三轮：裸 .hint 会污染宿主页面同名类，一律收进命名空间 */
+.dy-foods button + .dy-hint, .dy-hint { font-size: 11px; color: #56789a; margin: 2px 0 0; }
+.dafeiyu-chat input[type="text"][readonly] { opacity: 0.55; }
 
 /* ---- 右键模式菜单 ---- */
 .dafeiyu-menu {
