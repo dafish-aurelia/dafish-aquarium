@@ -7,10 +7,29 @@
   <script>
     // 新标签页 → 重定向回水缸主页（主人 2026-08-23 点名要的）。
     // HOME_URL 唯一事实源在 lib/url_sanitize.js（审查#8）。
-    // 若扩展未获 file 访问权限导致跳转失败，下面的珊瑚礁页本身就是完整兜底。
-    setTimeout(() => {
-      try { location.replace(window.DafeiyuSanitize.HOME_URL); } catch (e) {}
-    }, 0);
+    // 第一跳：页面级导航（已授权 file 访问的环境一次就成）；
+    // 第二跳：tabs 特权通道再试一次；
+    // 两跳都失败（未开「允许访问文件网址」）→ 显示授权指引，不把主人晾在半路。
+    (function () {
+      const TANK = window.DafeiyuSanitize.HOME_URL;
+      setTimeout(() => { try { location.replace(TANK); } catch (e) {} }, 0);
+      setTimeout(async () => {
+        if (!location.pathname.endsWith('newtab.html')) return; // 已跳走，无事发生
+        try {
+          const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
+          if (tab && tab.id != null) {
+            await chrome.tabs.update(tab.id, { url: TANK });
+            return;
+          }
+        } catch (e) {}
+        const hint = document.getElementById('file-hint');
+        if (!hint) return;
+        hint.style.display = 'block';
+        document.getElementById('go-ext').addEventListener('click', () => {
+          chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
+        });
+      }, 500);
+    })();
   </script>
   <link rel="stylesheet" href="newtab.css">
 </head>
@@ -26,6 +45,11 @@
       <button type="submit">出发</button>
     </form>
   </main>
+  <div id="file-hint" style="display:none;position:fixed;left:50%;bottom:18%;transform:translateX(-50%);background:rgba(8,30,48,.85);color:#bfe3ff;padding:14px 20px;border-radius:12px;font:14px/1.7 system-ui,'Microsoft YaHei',sans-serif;text-align:center;z-index:10;max-width:520px;">
+    跳转水缸被 Chrome 拦下啦：请在扩展设置里给「鲸鱼娘·大肥鱼」打开
+    <b>「允许访问文件网址」</b>开关，之后新标签页就能直接回水缸～
+    <button id="go-ext" style="margin-left:10px;cursor:pointer;border:0;border-radius:8px;padding:6px 12px;background:#39c5ff;color:#04222f;font-weight:600;">打开扩展设置</button>
+  </div>
   <script src="newtab.js"></script>
 </body>
 </html>
