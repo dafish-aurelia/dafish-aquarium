@@ -128,11 +128,18 @@
   }
   homeWelcome();
 
+  function stopMover() {
+    // 审查四轮P2-4：散步/摇摆步进句柄统一外挂 V.W._mover，这里负责掐断
+    if (V.W._mover) { clearInterval(V.W._mover); V.W._mover = null; }
+  }
+
   // ---- 模式：walk 散步 / follow 跟随鼠标 / still 原地 ----
   function setMode(m) {
     if (!['walk', 'follow', 'still'].includes(m)) return;
     mode = m;
+    stopMover(); // 审查四轮P2-4：切模式立刻掐断散步/摇摆步进，不再走完残留全程
     V.W.state = 'IDLE'; // 切模式时复位残留状态，防止卡死在旧状态（P0 教训）
+    V.setSprite('正面.png', false);
     chrome.storage.local.set({ pet_mode: m });
   }
   chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) mode = pet_mode; });
@@ -153,6 +160,7 @@
     if (!isActive() || chatOpen() || isHome()) return;
     const idleFor = Date.now() - lastActivity;
     if (idleFor > 10 * 60e3 && V.W.state !== 'SLEEP') {
+      stopMover(); // 审查四轮P2-4：散步/摇摆途中入睡，先掐掉步进循环别让她梦游
       V.W.state = 'SLEEP';
       V.setSprite('正面.png', false);
       V.showHeart('呼。。。呼。。。', 5000);
@@ -203,8 +211,9 @@
       let i = 0;
       const t = setInterval(() => {
         V.root.style.left = base + (i % 4 < 2 ? 6 : -6) + 'px';
-        if (++i > 20) { clearInterval(t); V.root.style.left = base + 'px'; V.W.state = 'IDLE'; }
+        if (++i > 20) { clearInterval(t); if (V.W._mover === t) V.W._mover = null; V.root.style.left = base + 'px'; V.W.state = 'IDLE'; }
       }, 120);
+      V.W._mover = t; // 审查四轮P2-4：句柄外挂，setMode/入睡可即时掐断
       return;
     }
     if (mode === 'still') return;
@@ -218,8 +227,9 @@
     const t = setInterval(() => {
       V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 1.5));
       V.root.style.left = V.W.x + 'px';
-      if (++i > steps) { clearInterval(t); V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
+      if (++i > steps) { clearInterval(t); if (V.W._mover === t) V.W._mover = null; V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
     }, 40);
+    V.W._mover = t;
   }, 4000 + Math.random() * 5000);
 
   // （审查#1）第二段 follow 循环已删除：与上方二维跟随循环重复，

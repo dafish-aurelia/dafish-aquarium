@@ -19,6 +19,7 @@
 import json
 import os
 import secrets
+import socket
 import sys
 import time
 import threading
@@ -82,6 +83,23 @@ def _append(path, obj):
         f.write(json.dumps(obj, ensure_ascii=False) + '\n')
 
 
+OUTBOX_ROTATE_BYTES = 5 * 1024 * 1024  # 审查四轮P2-6：只追加文件的超大化防线
+
+
+def _maybe_rotate_outbox():
+    """outbox 超过 5MB 就整体归档到 archive/，当前段清零重开。
+    游标按全局单调 id 计数，不受物理文件轮转影响。"""
+    outbox = BASE_DIR / 'outbox.jsonl'
+    try:
+        if outbox.exists() and outbox.stat().st_size >= OUTBOX_ROTATE_BYTES:
+            archive_dir = BASE_DIR / 'archive'
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(TZ).strftime('%Y%m%d-%H%M%S')
+            outbox.rename(archive_dir / f'outbox-{stamp}.jsonl')
+    except OSError:
+        pass
+
+
 _TOKEN = None
 
 
@@ -107,13 +125,13 @@ def _auth_token():
 
 def _stamp_fresh(name, ttl):
     hb = BASE_DIR / name
-    if not hb.exists():
-        return False
     try:
+        # 解析与比较整体包住（审查四轮P2-5）：naive 时间戳/文件竞态一律判离线，
+        # 绝不让 /health 与 deep_chat 路由 500
         t = datetime.fromisoformat(hb.read_text(encoding='utf-8').strip())
-    except ValueError:
+        return (datetime.now(TZ) - t) <= ttl
+    except (ValueError, OSError, TypeError):
         return False
-    return (datetime.now(TZ) - t) <= ttl
 
 
 def _fish_online():
@@ -126,15 +144,15 @@ def _projection_online():
 
 
 def _age_seconds(name):
-    """心跳文件年龄（秒）；不存在或损坏返回 None（审查二轮#6 巡检用）。"""
+    """心跳文件年龄（秒）；不存在/损坏/naive 时间戳一律返回 None（审查四轮P2-5）。"""
     p = BASE_DIR / name
     if not p.exists():
         return None
     try:
         t = datetime.fromisoformat(p.read_text(encoding='utf-8').strip())
-    except (ValueError, OSError):
+        return int((datetime.now(TZ) - t).total_seconds())
+    except (ValueError, OSError, TypeError):
         return None
-    return int((datetime.now(TZ) - t).total_seconds())
 
 
 def _standin_config():
@@ -176,7 +194,11 @@ def _call_standin_llm(user_text):
 class Handler(BaseHTTPRequestHandler):
     def _authorized(self):
         tok = self.headers.get('X-Dafeiyu-Token', '')
-        if tok and secrets.compare_digest(tok, _auth_token()):
+        try:
+            ok = bool(tok) and secrets.compare_digest(tok, _auth_token())
+        except TypeError:  # 非 ASCII 头等畸形输入：按未授权处理而非 500
+            ok = False
+        if ok:
             return True
         self._json(401, {'error': 'unauthorized'})
         return False
@@ -335,20 +357,23 @@ class Handler(BaseHTTPRequestHandler):
         outbox = BASE_DIR / 'outbox.jsonl'
 
         if path == '/api/inject':
-            msg = {'id': _next_id(), 'ts': _now(), **payload}
+            # 审查四轮P2-1：权威戳后置合并 —— 客户端伪造/回传的 id/ts 一律覆盖
+            msg = {**payload, 'id': _next_id(), 'ts': _now()}
             with MSG_COND:  # 落信与唤醒同临界区：等待者醒来必有信可取
                 _append(inbox, msg)
                 MSG_COND.notify_all()
             return self._json(200, {'ok': True, 'id': msg['id']})
 
         if path == '/api/outbox':
-            msg = {'id': _next_id(), 'ts': _now(), **payload}
+            msg = {**payload, 'id': _next_id(), 'ts': _now()}
             _append(outbox, msg)
+            _maybe_rotate_outbox()
             return self._json(200, {'ok': True, 'id': msg['id']})
 
         if path == '/api/deep_chat':
-            msg = {'id': _next_id(), 'ts': _now(), **payload}
+            msg = {**payload, 'id': _next_id(), 'ts': _now()}
             _append(outbox, msg)  # 本鱼回家必能看到（铁律 9 的另一半）
+            _maybe_rotate_outbox()
             if _fish_online():
                 return self._json(200, {'mode': 'fish', 'id': msg['id']})
             text, err = _call_standin_llm(str(payload.get('text', '')))
@@ -366,12 +391,25 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class Server(ThreadingHTTPServer):
+    """审查四轮 P1：Windows 的 SO_REUSEADDR 语义允许同端口双绑定且不报错，
+    旧防护（OSError→exit）永不触发 → 新旧信局并存、连接随机分流、全程静默错乱。
+    关掉地址重用并叠加 Windows 专属的 SO_EXCLUSIVEADDRUSE，把"端口被占"还原成硬错误。"""
+    allow_reuse_address = False
+
+    def server_bind(self):
+        excl = getattr(socket, 'SO_EXCLUSIVEADDRUSE', None)
+        if excl is not None:
+            self.socket.setsockopt(socket.SOL_SOCKET, excl, 1)
+        super().server_bind()
+
+
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
     BASE_DIR.mkdir(parents=True, exist_ok=True)
     while True:  # 自动重生：信局崩溃后 2 秒原地复活
         try:
-            srv = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+            srv = Server(('127.0.0.1', port), Handler)
             print(f'[pet-mailbox] listening on 127.0.0.1:{port} data={BASE_DIR}', flush=True)
             srv.serve_forever()
         except OSError as e:

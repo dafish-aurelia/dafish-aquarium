@@ -105,9 +105,15 @@
   // ---- 好感度 ----
   let intimacy = 0;
   chrome.storage.local.get('intimacy').then(({ intimacy: v = 0 }) => { intimacy = Number(v) || 0; });
-  function addIntimacy(n) {
-    intimacy += n;
-    chrome.storage.local.set({ intimacy: Math.round(intimacy * 10) / 10 });
+  async function addIntimacy(n) {
+    // 审查四轮P2-2：多 Tab 各持副本会互相覆盖（丢失更新）——写前重读权威值
+    try {
+      const { intimacy: v = 0 } = await chrome.storage.local.get('intimacy');
+      intimacy = Math.round(((Number(v) || 0) + n) * 10) / 10;
+    } catch (e) {
+      intimacy = Math.round((intimacy + n) * 10) / 10;
+    }
+    chrome.storage.local.set({ intimacy });
   }
   function levelName() {
     if (intimacy >= 60) return '本命鱼';

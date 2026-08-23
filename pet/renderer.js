@@ -26,7 +26,13 @@
   const img = document.createElement('img');
   img.className = 'dafeiyu-sprite';
   img.src = SPR('正面.png');
-  root.append(badge, toolbar, bubble, heart, img);
+  // 审查四轮P2-3：水平翻面放独立包装层——img 自身留给动画/CSS 情绪 transform，
+  // 否则 WAAPI 的 composite:replace 会吞掉内联镜像（朝左瞬间变朝右）、
+  // 类选择器也压不过内联样式导致情绪倾斜在朝左时失效。
+  const flipWrap = document.createElement('span');
+  flipWrap.className = 'dafeiyu-flip';
+  flipWrap.appendChild(img);
+  root.append(badge, toolbar, bubble, heart, flipWrap);
   document.documentElement.appendChild(root);
 
   const W = { x: Math.max(60, innerWidth - 140), dir: -1, state: 'IDLE', online: false };
@@ -44,7 +50,7 @@
     W, root, bubble, heart, img, S,
     setSprite(name, flip) {
       img.src = SPR(name);
-      img.style.transform = flip ? 'scaleX(-1)' : '';
+      flipWrap.style.transform = flip ? 'scaleX(-1)' : '';
     },
     showBubble(text, ms = 4000, emo) {
       if (emo) DafeiyuView.setEmotion(emo, ms);

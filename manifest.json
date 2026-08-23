@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
   "name": "鲸鱼娘·大肥鱼",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "大肥鱼在 Chrome 里的化身",
   "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": ["http://127.0.0.1/*"],
   "background": { "service_worker": "background.js" },
-  "action": { "default_title": "鲸鱼娘 召唤/潜水", "default_icon": "sprites/icon.png" },
+  "action": {
+    "default_title": "鲸鱼娘 召唤/潜水",
+    "default_icon": { "16": "sprites/icon-16.png", "32": "sprites/icon-32.png", "48": "sprites/icon-48.png" }
+  },
+  "icons": { "16": "sprites/icon-16.png", "32": "sprites/icon-32.png", "48": "sprites/icon-48.png", "128": "sprites/icon-128.png" },
   "chrome_url_overrides": { "newtab": "newtab.html" },
   "content_scripts": [
     {
@@ -25,7 +29,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["sprites/*.png"],
+      "resources": ["sprites/正面.png", "sprites/侧面.png", "sprites/背面.png"],
       "matches": ["<all_urls>"]
     }
   ]

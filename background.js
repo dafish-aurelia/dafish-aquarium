@@ -187,11 +187,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           catch (e) { sendResponse({ ok: false }); }
           break;
         }
-        case 'MAILBOX_INBOX': {
-          try { sendResponse(await mbJson('/api/inbox')); }
-          catch (e) { sendResponse({ ok: false, messages: [] }); }
-          break;
-        }
+        // （审查四轮）MAILBOX_INBOX 直排空通道已删：语义危险（绕过广播即焚信件）
         case 'MAILBOX_DEEP_CHAT': {
           // 审查二轮#4：给前端分类错误原因（锁门/断链），不再共用一句"出游"
           try {

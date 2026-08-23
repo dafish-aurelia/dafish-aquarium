@@ -86,6 +86,45 @@ def test_inject_then_inbox_pop_once(base):
     assert get(base, '/api/inbox')['messages'] == []
 
 
+def test_longpoll_woken_by_late_inject(base):
+    """审查三轮并发回归：取信者先挂起，1 秒后才 inject —— 唤醒必须即时到达，
+    不能因"查空与挂起不同临界区"而睡满整个 wait 时长。"""
+    import time as _time
+
+    def late_inject():
+        _time.sleep(1.0)
+        post(base, '/api/inject', {'type': 'reply', 'text': '迟到的信'})
+
+    th = threading.Thread(target=late_inject, daemon=True)
+    th.start()
+    t0 = _time.time()
+    msgs = get(base, '/api/inbox?wait=25')['messages']
+    elapsed = _time.time() - t0
+    th.join(5)
+    assert [m['text'] for m in msgs] == ['迟到的信']
+    assert elapsed < 10, f'唤醒耗时 {elapsed:.1f}s —— 疑似丢唤醒睡满了 wait'
+
+
+def test_server_stamp_overrides_client_id_ts(base):
+    """审查四轮P2-1 回归：客户端伪造的 id/ts 不得覆盖服务端权威戳。"""
+    r = post(base, '/api/inject', {'type': 'reply', 'text': '伪造尝试',
+                                   'id': 424242, 'ts': '2000-01-01T00:00:00+08:00'})
+    assert r['id'] != 424242
+    msgs = get(base, '/api/inbox')['messages']
+    mine = [m for m in msgs if m.get('text') == '伪造尝试']
+    assert len(mine) == 1
+    assert mine[0]['id'] != 424242
+    assert mine[0]['ts'] != '2000-01-01T00:00:00+08:00'
+
+
+def test_naive_timestamp_fails_safe(base, tmp_path):
+    """审查四轮P2-5 回归：naive 心跳时间戳只判离线，绝不让 /health 与路由 500。"""
+    (tmp_path / 'fish_heartbeat.txt').write_text(
+        datetime.datetime.now().isoformat(timespec='seconds'), encoding='utf-8')  # 无时区
+    assert pm._fish_online() is False
+    assert get(base, '/health')['ok'] is True
+
+
 def test_concurrent_pop_no_duplicate(base):
     for i in range(5):
         post(base, '/api/inject', {'type': 'proactive', 'text': str(i)})

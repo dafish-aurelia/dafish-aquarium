@@ -13,6 +13,8 @@
   -webkit-user-drag: none;
   touch-action: none;
 }
+/* 翻面包装层：与 sprite 的动画/情绪 transform 分层互不干扰（审查四轮P2-3） */
+#dafeiyu-root .dafeiyu-flip { display: inline-block; pointer-events: auto; }
 
 /* ---- 心情徽章：她当前所处场景/情绪 ---- */
 #dafeiyu-root .dafeiyu-badge {
