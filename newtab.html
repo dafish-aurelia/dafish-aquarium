@@ -3,34 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>大肥鱼的水缸</title>
+  <!-- MV3 禁止内联脚本（script-src 'self'），跳板逻辑全部住在 newtab.js -->
   <script src="lib/url_sanitize.js"></script>
-  <script>
-    // 新标签页 → 重定向回水缸主页（主人 2026-08-23 点名要的）。
-    // HOME_URL 唯一事实源在 lib/url_sanitize.js（审查#8）。
-    // 第一跳：页面级导航（已授权 file 访问的环境一次就成）；
-    // 第二跳：tabs 特权通道再试一次；
-    // 两跳都失败（未开「允许访问文件网址」）→ 显示授权指引，不把主人晾在半路。
-    (function () {
-      const TANK = window.DafeiyuSanitize.HOME_URL;
-      setTimeout(() => { try { location.replace(TANK); } catch (e) {} }, 0);
-      setTimeout(async () => {
-        if (!location.pathname.endsWith('newtab.html')) return; // 已跳走，无事发生
-        try {
-          const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
-          if (tab && tab.id != null) {
-            await chrome.tabs.update(tab.id, { url: TANK });
-            return;
-          }
-        } catch (e) {}
-        const hint = document.getElementById('file-hint');
-        if (!hint) return;
-        hint.style.display = 'block';
-        document.getElementById('go-ext').addEventListener('click', () => {
-          chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
-        });
-      }, 500);
-    })();
-  </script>
   <link rel="stylesheet" href="newtab.css">
 </head>
 <body>

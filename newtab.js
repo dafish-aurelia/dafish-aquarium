@@ -1,3 +1,28 @@
+// 新标签页跳板（MV3 禁内联脚本，逻辑必须住外部文件）：
+// 第一跳 页面级导航回水缸；第二跳 tabs 特权通道；
+// 两跳都失败 = 未开「允许访问文件网址」→ 显示授权指引，不把主人晾在半路。
+(function bootTankRedirect() {
+  const TANK = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
+  if (!TANK) return;
+  setTimeout(() => { try { location.replace(TANK); } catch (e) {} }, 0);
+  setTimeout(async () => {
+    if (!location.pathname.endsWith('newtab.html')) return; // 已跳走，无事发生
+    try {
+      const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
+      if (tab && tab.id != null) {
+        await chrome.tabs.update(tab.id, { url: TANK });
+        return;
+      }
+    } catch (e) {}
+    const hint = document.getElementById('file-hint');
+    if (!hint) return;
+    hint.style.display = 'block';
+    document.getElementById('go-ext').addEventListener('click', () => {
+      chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
+    });
+  }, 500);
+})();
+
 const GREETING_POOLS = {
   night: [
     '这么晚了还不睡呀…本鱼把咸鱼干放你桌角了。',
