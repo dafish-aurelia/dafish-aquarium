@@ -176,11 +176,10 @@
     '<label class="dy-row">上下文保留：<input type="number" class="dy-ctxkeep" min="4" max="40" step="2" style="width:64px"> 条</label>' +
     '<div class="dy-sep"></div>' +
     '<div class="dy-sub">🐠 代班小鱼（本鱼离线时顶班）</div>' +
-    '<input type="password" class="dy-apikey" placeholder="API Key（留空=不修改）" autocomplete="off">' +
-    '<input type="text" class="dy-baseurl" placeholder="Base URL，如 https://api.siliconflow.cn/v1">' +
-    '<input type="text" class="dy-model" placeholder="模型名，如 deepseek-ai/DeepSeek-V3">' +
-    '<div class="dy-actions"><button class="dy-save">💾 保存设置</button>' +
-    '<span class="dy-cfgstate"></span></div>';
+    // 审查五轮（对抗测试）：钥匙表单不得住在宿主页可读的 DOM 里，
+    // 改为跳转扩展自有安全页 settings.html（chrome-extension:// 独立源）。
+    '<p class="dy-hint">钥匙在独立安全页配置 —— 那里是扩展自己的地盘，网页脚本读不到。</p>' +
+    '<button class="dy-open-key">🔑 打开代班设置页</button>';
   settingsPanel.style.display = 'none';
   document.documentElement.appendChild(settingsPanel);
 
@@ -191,15 +190,6 @@
     settingsPanel.querySelector('.dy-size').value = String(Number(s) || 1);
     const { ctx_keep: k = 12 } = await chrome.storage.local.get('ctx_keep');
     settingsPanel.querySelector('.dy-ctxkeep').value = Number(k) || 12;
-    try {
-      const cfg = await window.DafeiyuMailbox.standinGet();
-      if (cfg && cfg.baseUrl !== undefined) settingsPanel.querySelector('.dy-baseurl').value = cfg.baseUrl || '';
-      if (cfg && cfg.model !== undefined) settingsPanel.querySelector('.dy-model').value = cfg.model || '';
-      const st = settingsPanel.querySelector('.dy-cfgstate');
-      st.textContent = cfg && cfg.hasKey ? `钥匙已配置（尾号${cfg.keyTail}）` : '未配置钥匙（代班只会说占位话）';
-    } catch (e) {
-      settingsPanel.querySelector('.dy-cfgstate').textContent = '信局不在家，读不到当前配置';
-    }
     settingsPanel.style.display = 'flex';
   }
 
@@ -232,28 +222,8 @@
     await chrome.storage.local.set({ pet_scale: Number(e.target.value) || 1 }); // onChanged 驱动 setScale
   });
   settingsPanel.querySelector('.dy-close').addEventListener('click', () => { settingsPanel.style.display = 'none'; });
-  settingsPanel.querySelector('.dy-save').addEventListener('click', async () => {
-    const keep = Math.max(4, Math.min(40, Number(settingsPanel.querySelector('.dy-ctxkeep').value) || 12));
-    await chrome.storage.local.set({ ctx_keep: keep });
-    const payload = {
-      baseUrl: settingsPanel.querySelector('.dy-baseurl').value.trim(),
-      model: settingsPanel.querySelector('.dy-model').value.trim(),
-    };
-    const apiKey = settingsPanel.querySelector('.dy-apikey').value.trim();
-    if (apiKey) payload.apiKey = apiKey; // 留空 = 不改动已存钥匙
-    const st = settingsPanel.querySelector('.dy-cfgstate');
-    st.textContent = '保存中…';
-    try {
-      const res = await window.DafeiyuMailbox.standinSet(payload);
-      if (res && res.ok) {
-        st.textContent = res.hasKey ? `已保存 ✓（钥匙尾号${res.keyTail}）` : '已保存 ✓（代班暂无钥匙）';
-        settingsPanel.querySelector('.dy-apikey').value = '';
-      } else {
-        st.textContent = '保存失败：信局不在家？';
-      }
-    } catch (e) {
-      st.textContent = '保存失败：信局不在家？';
-    }
+  settingsPanel.querySelector('.dy-open-key').addEventListener('click', () => {
+    window.DafeiyuMailbox.openStandinSettings();
   });
 
   // ---- 右键模式菜单（散步/跟随/待着）----

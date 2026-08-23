@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>代班小鱼 · 安全配置</title>
+  <style>
+    body {
+      font-family: "Microsoft YaHei", system-ui, sans-serif;
+      background: linear-gradient(180deg, #04122e, #0f4c75);
+      color: #dff3ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    main {
+      width: min(460px, 90vw);
+      background: rgba(245, 251, 255, 0.97);
+      color: #0a3555;
+      border-radius: 16px;
+      padding: 22px 24px;
+      box-shadow: 0 10px 30px rgba(0, 40, 80, 0.35);
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.tip { font-size: 12px; color: #56789a; margin: 0 0 14px; line-height: 1.6; }
+    label { display: block; font-size: 12px; color: #2b7fc4; margin: 12px 0 4px; font-weight: bold; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(90, 160, 220, 0.5);
+      outline: none;
+      font-size: 13px;
+    }
+    input:focus { border-color: #3aa7e0; }
+    .row { margin-bottom: 4px; }
+    button {
+      margin-top: 16px;
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #3aa7e0, #2b7fc4);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #state { display: block; margin-top: 10px; font-size: 12px; color: #56789a; min-height: 18px; text-align: center; }
+    .ok { color: #178a50; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🐠 代班小鱼 · 安全配置</h1>
+    <p class="tip">
+      本页是扩展自有页面（chrome-extension:// 独立源），宿主网页的脚本无法读取这里的输入。
+      代班小鱼在缸里的本鱼离线时顶班回复；她无长期记忆，配置仅保存在本地信局。
+    </p>
+    <div class="row"><label for="k">API Key</label><input id="k" type="password" autocomplete="off" placeholder="留空 = 不修改已保存的钥匙"></div>
+    <div class="row"><label for="u">Base URL</label><input id="u" type="text" placeholder="https://api.siliconflow.cn/v1"></div>
+    <div class="row"><label for="m">Model</label><input id="m" type="text" placeholder="deepseek-ai/DeepSeek-V3"></div>
+    <button id="save">💾 保存</button>
+    <span id="state"></span>
+  </main>
+  <script src="js/settings_page.js"></script>
+</body>
+</html>

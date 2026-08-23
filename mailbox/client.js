@@ -5,8 +5,7 @@
     send: (msg) => chrome.runtime.sendMessage(msg),
     health: () => chrome.runtime.sendMessage({ type: 'MAILBOX_HEALTH' }),
     deepChat: (payload) => chrome.runtime.sendMessage({ type: 'MAILBOX_DEEP_CHAT', payload }),
-    standinGet: () => chrome.runtime.sendMessage({ type: 'MAILBOX_STANDIN_GET' }),
-    standinSet: (payload) => chrome.runtime.sendMessage({ type: 'MAILBOX_STANDIN_SET', payload }),
+    openStandinSettings: () => chrome.runtime.sendMessage({ type: 'OPEN_STANDIN_SETTINGS' }),
     outbox: (payload) => chrome.runtime.sendMessage({ type: 'MAILBOX_OUTBOX', payload }),
   };
 })();

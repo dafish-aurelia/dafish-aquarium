@@ -208,19 +208,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           } catch (e) { sendResponse({ ok: false, reason: 'offline' }); }
           break;
         }
-        case 'MAILBOX_STANDIN_GET': {
-          try { sendResponse(await mbJson('/api/standin_config')); }
-          catch (e) { sendResponse({ ok: false }); }
-          break;
-        }
-        case 'MAILBOX_STANDIN_SET': {
-          try {
-            sendResponse(await mbJson('/api/standin_config', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(msg.payload || {}),
-            }));
-          } catch (e) { sendResponse({ ok: false }); }
+        case 'OPEN_STANDIN_SETTINGS': {
+          // 审查五轮：钥匙表单住在扩展自有页面（独立源），宿主页脚本读不到
+          chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+          sendResponse({ ok: true });
           break;
         }
         case 'MAILBOX_OUTBOX': {
