@@ -106,6 +106,13 @@
   };
   window.DafeiyuView = DafeiyuView;
 
+  DafeiyuView.walkFrames = ['侧面.png'];
+  ['侧面走A.png', '侧面走B.png'].forEach((n) => {
+    const p = new Image();
+    p.onload = () => { if (DafeiyuView.walkFrames.indexOf(n) < 0) DafeiyuView.walkFrames.push(n); };
+    p.src = SPR(n); // 生成帧存在则加入行走循环；缺失自动回退单帧
+  });
+
   // 微生命：随机眨眼（轻微压扁一瞬）
   (function blinkLoop() {
     setTimeout(() => {

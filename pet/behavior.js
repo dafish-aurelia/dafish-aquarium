@@ -131,6 +131,7 @@
   function stopMover() {
     // 审查四轮P2-4：散步/摇摆步进句柄统一外挂 V.W._mover，这里负责掐断
     if (V.W._mover) { clearInterval(V.W._mover); V.W._mover = null; }
+    V.img.classList.remove('dy-walk-bob');
   }
 
   // ---- 模式：walk 散步 / follow 跟随鼠标 / still 原地 ----
@@ -221,13 +222,22 @@
     // walk
     V.W.state = 'WALK';
     V.W.dir = Math.random() < 0.5 ? -1 : 1;
-    V.setSprite('侧面.png', V.W.dir > 0);
+    const frames = (V.walkFrames && V.walkFrames.length > 1) ? V.walkFrames : ['侧面.png'];
+    V.setSprite(frames[0], V.W.dir > 0);
+    V.img.classList.add('dy-walk-bob'); // 行走上下起伏，告别平移滑行感
     const steps = 60 + Math.floor(Math.random() * 80);
     let i = 0;
+    let f = 0;
     const t = setInterval(() => {
       V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 1.5));
       V.root.style.left = V.W.x + 'px';
-      if (++i > steps) { clearInterval(t); if (V.W._mover === t) V.W._mover = null; V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
+      // 行走帧循环：每 5 tick（200ms）换一帧，尾巴摆起来
+      if (frames.length > 1 && ++f % 5 === 0) V.setSprite(frames[(f / 5) % frames.length | 0], V.W.dir > 0);
+      if (++i > steps) {
+        clearInterval(t); if (V.W._mover === t) V.W._mover = null;
+        V.img.classList.remove('dy-walk-bob');
+        V.W.state = 'IDLE'; V.setSprite('正面.png', false);
+      }
     }, 40);
     V.W._mover = t;
   }, 4000 + Math.random() * 5000);

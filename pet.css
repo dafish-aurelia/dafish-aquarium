@@ -248,6 +248,15 @@
 }
 .dafeiyu-menu button:hover { background: rgba(120, 200, 255, 0.22); }
 
+/* ---- 行走起伏：告别平移滑行感（主人反馈）---- */
+@keyframes dafeiyu-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+#dafeiyu-root .dafeiyu-sprite.dy-walk-bob {
+  animation: dafeiyu-bob 0.72s ease-in-out infinite;
+}
+
 /* ---- 飘心 / 转圈 ---- */
 .dafeiyu-float {
   position: absolute;
