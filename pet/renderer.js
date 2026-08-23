@@ -5,7 +5,8 @@
 
   const root = document.createElement('div');
   root.id = 'dafeiyu-root';
-  root.dataset.dyBuild = 'cs-0.3.9'; // 构建标记：主世界可读，用于验证内容脚本是否从磁盘重读
+  // 构建标记运行时读 manifest（审查二轮#1：手写字符串必然漂移，验收链靠它）
+  root.dataset.dyBuild = 'cs-' + chrome.runtime.getManifest().version;
   const toolbar = document.createElement('div');
   toolbar.className = 'dafeiyu-toolbar';
   toolbar.innerHTML =
@@ -28,7 +29,7 @@
   root.append(badge, toolbar, bubble, heart, img);
   document.documentElement.appendChild(root);
 
-  const W = { x: Math.max(60, innerWidth - 140), dir: -1, state: 'IDLE', online: false, mode: 'walk' };
+  const W = { x: Math.max(60, innerWidth - 140), dir: -1, state: 'IDLE', online: false };
   root.style.left = W.x + 'px';
 
   // 三状态分离：可见性 = enabled && active

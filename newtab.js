@@ -1,26 +1,22 @@
 // 新标签页跳板（MV3 禁内联脚本，逻辑必须住外部文件）：
-// 第一跳 页面级导航回水缸；第二跳 tabs 特权通道；
-// 两跳都失败 = 未开「允许访问文件网址」→ 显示授权指引，不把主人晾在半路。
-(function bootTankRedirect() {
+// 审查二轮#5 —— 只走 chrome.tabs.update 特权通道这一条路（成功率更高、
+// 语义更干净），砍掉 location.replace 第一跳以消除同 URL 双重导航的竞争。
+// 失败 = 未开「允许访问文件网址」→ 显示授权指引，不把主人晾在半路。
+(async function bootTankRedirect() {
   const TANK = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
   if (!TANK) return;
-  setTimeout(() => { try { location.replace(TANK); } catch (e) {} }, 0);
-  setTimeout(async () => {
-    if (!location.pathname.endsWith('newtab.html')) return; // 已跳走，无事发生
-    try {
-      const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
-      if (tab && tab.id != null) {
-        await chrome.tabs.update(tab.id, { url: TANK });
-        return;
-      }
-    } catch (e) {}
-    const hint = document.getElementById('file-hint');
-    if (!hint) return;
-    hint.style.display = 'block';
-    document.getElementById('go-ext').addEventListener('click', () => {
-      chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
-    });
-  }, 500);
+  try {
+    const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
+    if (!tab || tab.id == null) return;
+    await chrome.tabs.update(tab.id, { url: TANK });
+    return; // 成功跳走，本页使命结束
+  } catch (e) {}
+  const hint = document.getElementById('file-hint');
+  if (!hint) return;
+  hint.style.display = 'block';
+  document.getElementById('go-ext').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
+  });
 })();
 
 const GREETING_POOLS = {

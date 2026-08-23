@@ -243,33 +243,52 @@
     },
   };
 
+  let sending = false; // 审查二轮#2：LLM 等待期防连点重入（并发塞信/重复烧钥匙）
   async function send() {
+    if (sending) return;
     const input = panel.querySelector('.dy-input');
     const text = input.value.trim();
     if (!text) return;
+    sending = true;
+    const btn = panel.querySelector('.dy-send');
+    btn.disabled = true;
+    input.readOnly = true;
     input.value = '';
-    window.DafeiyuChat.append('主人', text); // append 内部已 push 进 conversationContext，勿重复
+    try {
+      window.DafeiyuChat.append('主人', text); // append 内部已 push 进 conversationContext，勿重复
 
-    // 所有输入默认直达缸里的本鱼（信局路由；本鱼离线时代班小鱼自动顶班）
-    V.setEmotion('think', 3000); V.showBubble('（装进信封，游向缸里……）', 3000);
-    const env = {
-      type: 'deep_chat',
-      text: text,
-      page: window.DafeiyuSenses.capture(),
-      conversation_context: conversationContext.slice(-6).map((r) => r.who + ':' + r.text),
-      browser_context: [],
-    };
-    const res = await window.DafeiyuMailbox.deepChat(env);
-    if (res && res.mode === 'fish') {
-      B.markDeep();
-      window.DafeiyuChat.append('她', '信送到了，等本鱼回信～');
-      addIntimacy(0.5);
-    } else if (res && res.mode === 'standin') {
-      B.markDeep();
-      window.DafeiyuChat.append('代班小鱼', res.text);
-      V.showBubble(res.text, 6000);
-    } else {
-      window.DafeiyuChat.append('她', '（本鱼暂时出游了…）');
+      // 所有输入默认直达缸里的本鱼（信局路由；本鱼离线时代班小鱼自动顶班）
+      V.setEmotion('think', 3000); V.showBubble('（装进信封，游向缸里……）', 3000);
+      const env = {
+        type: 'deep_chat',
+        text: text,
+        page: window.DafeiyuSenses.capture(),
+        conversation_context: conversationContext.slice(-6).map((r) => r.who + ':' + r.text),
+        browser_context: [],
+      };
+      const res = await window.DafeiyuMailbox.deepChat(env);
+      if (res && res.mode === 'fish') {
+        B.markDeep();
+        window.DafeiyuChat.append('她', '信送到了，等本鱼回信～');
+        addIntimacy(0.5);
+      } else if (res && res.mode === 'standin') {
+        B.markDeep();
+        window.DafeiyuChat.append('代班小鱼', res.text);
+        V.showBubble(res.text, 6000);
+      } else {
+        // 审查二轮#4：区分断链/锁门/在途，别让 SW 打盹背"出游"的锅
+        const why = res && res.reason === 'auth'
+          ? '（信局锁门了，钥匙没对上……）'
+          : res && res.reason === 'offline'
+            ? '（游不到信局——它出门了吗？信不会丢，稍后自动补送。）'
+            : '（信已投出，回信会自己游回来～）';
+        window.DafeiyuChat.append('她', why);
+        V.showBubble(why, 5000);
+      }
+    } finally {
+      sending = false;
+      btn.disabled = false;
+      input.readOnly = false;
     }
   }
   panel.querySelector('.dy-send').addEventListener('click', send);

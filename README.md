@@ -17,7 +17,9 @@
 
 - **钥匙永不进浏览器**：LLM 钥匙只住工作区 `.env`，扩展零密钥；
 - **信局令牌鉴权**：`auth_token.txt` 共享密钥 + 自定义头强制 CORS 预检，跨站网页戳不进；
-- **URL 脱敏**：信封里只带 origin+path，query/fragment 一律丢弃。
+- **URL 脱敏**：信封里只带 origin+path，query/fragment 一律丢弃；
+- **本地网络双保险**：Chrome 141 起网页访问 localhost 需用户显式授权，
+  恶意页面直戳信局的路被浏览器从系统层面再封一道。
 
 ## 功能
 

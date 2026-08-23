@@ -122,6 +122,18 @@ def _projection_online():
     return _stamp_fresh('projection_heartbeat.txt', PROJECTION_TTL)
 
 
+def _age_seconds(name):
+    """心跳文件年龄（秒）；不存在或损坏返回 None（审查二轮#6 巡检用）。"""
+    p = BASE_DIR / name
+    if not p.exists():
+        return None
+    try:
+        t = datetime.fromisoformat(p.read_text(encoding='utf-8').strip())
+    except (ValueError, OSError):
+        return None
+    return int((datetime.now(TZ) - t).total_seconds())
+
+
 def _standin_config():
     """代班 LLM 配置入口：STANDIN_* 优先，DEEPSEEK_* 向后兼容，再回落官方默认。
     主人只需在工作区 .env 里填 STANDIN_API_KEY / STANDIN_BASE_URL / STANDIN_MODEL。"""
@@ -246,7 +258,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/health':
             self._json(200, {'ok': True, 'ts': _now(),
                              'fish_online': _fish_online(),
-                             'projection_online': _projection_online()})
+                             'projection_online': _projection_online(),
+                             'fish_age_s': _age_seconds('fish_heartbeat.txt'),
+                             'projection_age_s': _age_seconds('projection_heartbeat.txt')})
         elif path == '/api/inbox':
             # 长轮询：?wait=秒数 —— 没有信件时挂起等待，inject 会唤醒（实时推送）
             wait_s = 0.0

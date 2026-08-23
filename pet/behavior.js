@@ -66,8 +66,8 @@
     '本鱼的思维链好长啊……算了不想了。',
     '今天也在认真待机中，请放心摸鱼。'
   ];
-  let quips = BUNDLED_QUIPS;
-  let hearts = BUNDLED_HEARTS;
+  const QUIPS = BUNDLED_QUIPS;
+  const HEARTS = BUNDLED_HEARTS;
   const tickets = [];
   let lastQuip = 0;
   let lastDeep = 0;
@@ -97,15 +97,11 @@
   function pick(arr) { return arr.length ? arr[Math.floor(Math.random() * arr.length)] : ''; }
 
   // 场景感知台词：70% 说应景的话（工作/看剧/摸鱼），30% 用通用池
+  // （审查二轮P2：词料已内置为常量对象，删除数组分支死代码）
   function pickQuip() {
     const scene = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
-    const sceneQuips = (quips && typeof quips === 'object' && !Array.isArray(quips)) ? quips : null;
-    if (sceneQuips) {
-      const pool = sceneQuips[scene] || [];
-      if (pool.length && Math.random() < 0.7) return pick(pool);
-      return pick(sceneQuips.generic) || '咕噜噜……';
-    }
-    return pick(Array.isArray(quips) ? quips : []);
+    const pool = (QUIPS[scene] || []).length && Math.random() < 0.7 ? QUIPS[scene] : QUIPS.generic;
+    return pick(pool) || '咕噜噜……';
   }
 
   // 心情徽章跟随场景刷新（☀️摸鱼 💼工作 🍿看剧 🏠在家）
@@ -139,7 +135,7 @@
     V.W.state = 'IDLE'; // 切模式时复位残留状态，防止卡死在旧状态（P0 教训）
     chrome.storage.local.set({ pet_mode: m });
   }
-  chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) { mode = pet_mode; V.W.mode = pet_mode; } });
+  chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) mode = pet_mode; });
 
   document.addEventListener('pointermove', (e) => {
     lastActivity = Date.now(); // 审查#2：唤醒必须重置空闲计时，否则 10 分钟后永远秒睡
@@ -238,13 +234,12 @@
     try { c = window.DafeiyuSenses.content(); } catch (e) { return; }
     if (!c || !c.kind || !c.title) return;
     const sig = c.kind + '|' + c.title;
-    const isFirstOfThisPage = lastSig === '';
     if (sig === lastSig) return;
     lastSig = sig;
 
     // 本地即时反应：模板填真实标题（80%概率，聊天中不打扰）
     if (!chatOpen() && Math.random() < 0.8) {
-      const tplPool = (quips && quips[c.kind + '_tpl']) || [];
+      const tplPool = QUIPS[c.kind + '_tpl'] || [];
       if (tplPool.length) {
         const line = pick(tplPool).replace(/\{title\}/g, c.title);
         V.showBubble(line, 5200, c.kind === 'video' ? 'happy' : 'think');
@@ -298,6 +293,7 @@
     if (!isActive() || !canSpeak()) return;
     const now = Date.now();
     const idx = tickets.findIndex((t) =>
+      // not_before/expires_at 为定时券预留字段，暂无写入方，保留前置校验（审查二轮P2）
       (!t.not_before || now >= Date.parse(t.not_before)) &&
       (!t.expires_at || now <= Date.parse(t.expires_at)));
     if (idx >= 0) {
@@ -319,7 +315,7 @@
     const now = Date.now();
     if (now - lastHeart < 3 * 60e3) return;
     lastHeart = now;
-    V.showHeart('（' + pick(hearts) + '）', 5200);
+    V.showHeart('（' + pick(HEARTS) + '）', 5200);
   }, 4 * 60e3);
 
   // ---- 电量彩蛋（一次性）----

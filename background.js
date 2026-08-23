@@ -184,13 +184,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
         case 'MAILBOX_DEEP_CHAT': {
+          // 审查二轮#4：给前端分类错误原因（锁门/断链），不再共用一句"出游"
           try {
-            sendResponse(await mbJson('/api/deep_chat', {
+            const res = await mbFetch('/api/deep_chat', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(msg.payload),
-            }));
-          } catch (e) { sendResponse({ ok: false }); }
+            });
+            if (res.status === 401) {
+              invalidateToken();
+              sendResponse({ ok: false, reason: 'auth' });
+              break;
+            }
+            sendResponse(await res.json());
+          } catch (e) { sendResponse({ ok: false, reason: 'offline' }); }
           break;
         }
         case 'MAILBOX_OUTBOX': {
