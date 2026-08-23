@@ -321,7 +321,7 @@
 
   // ---- 思维链心声：灰色斜体小气泡，独立于搭话冷却，更轻更频 ----
   setInterval(() => {
-    if (!hearts.length || !isActive() || chatOpen() || Math.random() > 0.45) return;
+    if (!HEARTS.length || !isActive() || chatOpen() || Math.random() > 0.45) return;
     const now = Date.now();
     if (now - lastHeart < 3 * 60e3) return;
     lastHeart = now;
