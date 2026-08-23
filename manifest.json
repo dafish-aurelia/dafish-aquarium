@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "鲸鱼娘·大肥鱼",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "大肥鱼在 Chrome 里的化身",
   "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": ["http://127.0.0.1/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "鲸鱼娘 召唤/潜水" },
+  "chrome_url_overrides": { "newtab": "newtab.html" },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
