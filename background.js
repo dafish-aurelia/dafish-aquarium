@@ -87,6 +87,10 @@ async function inboxLoop() {
     inboxLoopRunning = false;
   }
 }
+
+// 看门狗统一入口：冷启动与 alarm 都从这里拉起长轮询循环（inboxLoop 自带重入保护）
+function startInboxLoop() { inboxLoop(); }
+
 startInboxLoop();
 
 async function mailboxBase() {
