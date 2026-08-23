@@ -47,6 +47,19 @@ STANDIN_PROMPT = (
 )
 
 
+STANDIN_CONFIG_PATH = BASE_DIR / 'standin_config.json'
+
+
+def _load_standin_file():
+    """主人从扩展设置面板写入的代班配置（最高优先级）。损坏即视为不存在。"""
+    try:
+        with open(STANDIN_CONFIG_PATH, encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def _load_env():
     """读工作区 .env（setdefault，不覆盖已有环境变量）。钥匙只住在这里，永不进浏览器。"""
     envp = Path(__file__).resolve().parents[3] / '.env'
@@ -156,14 +169,16 @@ def _age_seconds(name):
 
 
 def _standin_config():
-    """代班 LLM 配置入口：STANDIN_* 优先，DEEPSEEK_* 向后兼容，再回落官方默认。
-    主人只需在工作区 .env 里填 STANDIN_API_KEY / STANDIN_BASE_URL / STANDIN_MODEL。"""
+    """代班 LLM 配置入口（审查四轮后扩展主人提案）：
+    设置面板落盘的 standin_config.json > 环境变量 STANDIN_* > DEEPSEEK_* > 官方默认。"""
     _load_env()
-    base = (os.environ.get('STANDIN_BASE_URL')
+    f = _load_standin_file()
+    base = (f.get('baseUrl') or os.environ.get('STANDIN_BASE_URL')
             or os.environ.get('DEEPSEEK_BASE_URL')
             or 'https://api.deepseek.com/v1').rstrip('/')
-    key = os.environ.get('STANDIN_API_KEY') or os.environ.get('DEEPSEEK_API_KEY', '')
-    model = os.environ.get('STANDIN_MODEL') or os.environ.get('DEEPSEEK_MODEL', 'deepseek-chat')
+    key = f.get('apiKey') or os.environ.get('STANDIN_API_KEY') or os.environ.get('DEEPSEEK_API_KEY', '')
+    model = (f.get('model') or os.environ.get('STANDIN_MODEL')
+             or os.environ.get('DEEPSEEK_MODEL') or 'deepseek-chat')
     return base, key, model
 
 
@@ -280,6 +295,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {'token': _auth_token()})
         if not self._authorized():
             return
+        if path == '/api/standin_config':
+            # 设置面板专用（审查主人提案）：钥匙只写不读回，GET 仅回掩码视图
+            f = _load_standin_file()
+            key = f.get('apiKey') or ''
+            return self._json(200, {'hasKey': bool(key),
+                                    'keyTail': key[-4:] if key else '',
+                                    'baseUrl': f.get('baseUrl', ''),
+                                    'model': f.get('model', '')})
         if path == '/health':
             self._json(200, {'ok': True, 'ts': _now(),
                              'fish_online': _fish_online(),
@@ -343,7 +366,15 @@ class Handler(BaseHTTPRequestHandler):
             # 注意：这不参与 deep_chat 路由判定（2026-08-23 前的教训见文件头）。
             BASE_DIR.mkdir(parents=True, exist_ok=True)
             (BASE_DIR / 'projection_heartbeat.txt').write_text(_now(), encoding='utf-8')
-            return self._json(200, {'ok': True})
+            resp = {'ok': True}
+            flag = BASE_DIR / 'reload.flag'
+            if flag.exists():
+                try:
+                    flag.unlink()
+                except OSError:
+                    pass
+                resp['devReload'] = True
+            return self._json(200, resp)
         if path == '/api/fish_heartbeat':
             # 本鱼心跳：只有缸里的本体当值（读信桥 / Harness 会话）才发。
             BASE_DIR.mkdir(parents=True, exist_ok=True)
@@ -356,6 +387,24 @@ class Handler(BaseHTTPRequestHandler):
         inbox = BASE_DIR / 'inbox.jsonl'
         outbox = BASE_DIR / 'outbox.jsonl'
 
+        if path == '/api/standin_config':
+            # 保存设置面板提交的代班配置；空串=清除该字段，缺省字段=保持不变
+            f = _load_standin_file()
+            for k in ('apiKey', 'baseUrl', 'model'):
+                if k in payload:
+                    v = str(payload[k]).strip()
+                    if v:
+                        f[k] = v
+                    else:
+                        f.pop(k, None)
+            BASE_DIR.mkdir(parents=True, exist_ok=True)
+            with open(STANDIN_CONFIG_PATH, 'w', encoding='utf-8') as fp:
+                json.dump(f, fp, ensure_ascii=False, indent=2)
+            key = f.get('apiKey') or ''
+            return self._json(200, {'ok': True, 'hasKey': bool(key),
+                                    'keyTail': key[-4:] if key else '',
+                                    'baseUrl': f.get('baseUrl', ''),
+                                    'model': f.get('model', '')})
         if path == '/api/inject':
             # 审查四轮P2-1：权威戳后置合并 —— 客户端伪造/回传的 id/ts 一律覆盖
             msg = {**payload, 'id': _next_id(), 'ts': _now()}
@@ -376,7 +425,17 @@ class Handler(BaseHTTPRequestHandler):
             _maybe_rotate_outbox()
             if _fish_online():
                 return self._json(200, {'mode': 'fish', 'id': msg['id']})
-            text, err = _call_standin_llm(str(payload.get('text', '')))
+            # 审查主人提案：代班靠 prompt + 场景 —— 把主人所在页面拼进请求
+            page = payload.get('page') or {}
+            scene_bits = []
+            if page.get('domain'):
+                scene_bits.append(str(page['domain']))
+            if page.get('title'):
+                scene_bits.append('「' + str(page['title'])[:40] + '」')
+            user_text = str(payload.get('text', ''))
+            if scene_bits:
+                user_text += '\n（场景：主人在 ' + ' · '.join(scene_bits) + '）'
+            text, err = _call_standin_llm(user_text)
             if text is None:
                 text = ('（代班小鱼还没领到钥匙，先替本鱼看着缸～）'
                         if err == 'no-key' else '（代班小鱼打了个盹，稍后再试…）')

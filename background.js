@@ -125,7 +125,10 @@ async function postHeartbeat() {
   try {
     const { enabled = true } = await chrome.storage.local.get('enabled');
     if (!enabled) return;
-    await mbJson('/api/heartbeat', { method: 'POST' });
+    const res = await mbJson('/api/heartbeat', { method: 'POST' });
+    // 自迭代通道（主人授权）：信局转达刷新指令 → 立即重载扩展，
+    // 让新版本内容脚本无需主人手动去 chrome://extensions 点按钮。
+    if (res && res.devReload) chrome.runtime.reload();
   } catch (e) { /* 信局不在家：静默，等下个 alarm 再试 */ }
 }
 chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
@@ -203,6 +206,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
             sendResponse(await res.json());
           } catch (e) { sendResponse({ ok: false, reason: 'offline' }); }
+          break;
+        }
+        case 'MAILBOX_STANDIN_GET': {
+          try { sendResponse(await mbJson('/api/standin_config')); }
+          catch (e) { sendResponse({ ok: false }); }
+          break;
+        }
+        case 'MAILBOX_STANDIN_SET': {
+          try {
+            sendResponse(await mbJson('/api/standin_config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(msg.payload || {}),
+            }));
+          } catch (e) { sendResponse({ ok: false }); }
           break;
         }
         case 'MAILBOX_OUTBOX': {

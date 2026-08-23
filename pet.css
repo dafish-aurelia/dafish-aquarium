@@ -40,7 +40,7 @@
 .dafeiyu-sprite.dy-emo-happy { filter: brightness(1.1) saturate(1.25); }
 #dafeiyu-root .dafeiyu-bubble {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 52px); /* 上移避开悬浮工具条（主人反馈按钮被鱼头挡） */
   left: 50%;
   transform: translateX(-50%);
   max-width: 260px;
@@ -119,10 +119,11 @@
   cursor: pointer;
 }
 
-/* ---- 悬浮工具条：与头顶重叠 12px 保证 hover 链不断，淡出延迟 0.25s 留缓冲 ---- */
+/* ---- 悬浮工具条：整体上移不被鱼头遮挡（主人反馈）；::after 桥接热区保证
+        从鱼头到按钮的 hover 链不断，淡出延迟 0.25s 留缓冲 ---- */
 #dafeiyu-root .dafeiyu-toolbar {
   position: absolute;
-  bottom: calc(100% - 12px);
+  bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -131,6 +132,14 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease 0.25s;
+}
+#dafeiyu-root .dafeiyu-toolbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 18px; /* 桥接条：补上按钮与鱼头之间的空隙 */
 }
 #dafeiyu-root:hover .dafeiyu-toolbar {
   opacity: 1;
@@ -160,6 +169,29 @@
 /* ---- 喂食面板 ---- */
 .dafeiyu-chat.dafeiyu-feed { display: none; }
 .dafeiyu-chat.dafeiyu-feed[style*="flex"] { display: flex; }
+
+/* ---- 设置面板（⚙️）---- */
+.dafeiyu-settings .dy-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dafeiyu-settings select,
+.dafeiyu-settings input {
+  border: 1px solid rgba(90, 160, 220, 0.5);
+  border-radius: 8px;
+  padding: 5px 8px;
+  outline: none;
+  background: #fff;
+  color: #0a3555;
+}
+.dafeiyu-settings input[type="password"],
+.dafeiyu-settings input[type="text"] { width: 100%; }
+.dafeiyu-settings .dy-sep { height: 1px; background: rgba(90, 160, 220, 0.35); margin: 4px 0; }
+.dafeiyu-settings .dy-sub { font-weight: bold; color: #2b7fc4; font-size: 12px; }
+.dafeiyu-settings .dy-actions { display: flex; align-items: center; gap: 8px; }
+.dafeiyu-settings .dy-cfgstate { font-size: 11px; color: #56789a; }
+
 .dy-feed-title { font-weight: bold; }
 .dy-head {
   display: flex;

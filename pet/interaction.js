@@ -156,30 +156,103 @@
     foodsBox.appendChild(btn);
   }
 
-  // ---- 工具条：💬聊天 / 🍪喂食 / ⚙️大小 ----
+  // ---- 工具条：💬聊天 / 🍪喂食 / ⚙️设置 ----
+  // 审查主人反馈：⚙️ 从"循环切大小"升级为设置面板（尺寸/上下文阈值/代班API），
+  // 因为循环切换既难发现也放不下钥匙入口。
   const SIZES = [0.8, 1, 1.3];
   let sizeIdx = 1;
   chrome.storage.local.get('pet_scale').then(({ pet_scale: s = 1 }) => {
     sizeIdx = Math.max(0, SIZES.indexOf(Number(s)));
     if (sizeIdx < 0) sizeIdx = 1;
   });
+
+  // 设置面板（⚙️ 打开）
+  const settingsPanel = document.createElement('div');
+  settingsPanel.className = 'dafeiyu-chat dafeiyu-settings';
+  settingsPanel.innerHTML =
+    '<div class="dy-head"><span>⚙️ 本鱼设置</span><button class="dy-close" title="收起">✕</button></div>' +
+    '<label class="dy-row">尺寸：' +
+      '<select class="dy-size"><option value="0.8">小</option><option value="1">标准</option><option value="1.3">大</option></select></label>' +
+    '<label class="dy-row">上下文保留：<input type="number" class="dy-ctxkeep" min="4" max="40" step="2" style="width:64px"> 条</label>' +
+    '<div class="dy-sep"></div>' +
+    '<div class="dy-sub">🐠 代班小鱼（本鱼离线时顶班）</div>' +
+    '<input type="password" class="dy-apikey" placeholder="API Key（留空=不修改）" autocomplete="off">' +
+    '<input type="text" class="dy-baseurl" placeholder="Base URL，如 https://api.siliconflow.cn/v1">' +
+    '<input type="text" class="dy-model" placeholder="模型名，如 deepseek-ai/DeepSeek-V3">' +
+    '<div class="dy-actions"><button class="dy-save">💾 保存设置</button>' +
+    '<span class="dy-cfgstate"></span></div>';
+  settingsPanel.style.display = 'none';
+  document.documentElement.appendChild(settingsPanel);
+
+  async function openSettings() {
+    window.DafeiyuChat.close();
+    feedPanel.style.display = 'none';
+    const { pet_scale: s = 1 } = await chrome.storage.local.get('pet_scale');
+    settingsPanel.querySelector('.dy-size').value = String(Number(s) || 1);
+    const { ctx_keep: k = 12 } = await chrome.storage.local.get('ctx_keep');
+    settingsPanel.querySelector('.dy-ctxkeep').value = Number(k) || 12;
+    try {
+      const cfg = await window.DafeiyuMailbox.standinGet();
+      if (cfg && cfg.baseUrl !== undefined) settingsPanel.querySelector('.dy-baseurl').value = cfg.baseUrl || '';
+      if (cfg && cfg.model !== undefined) settingsPanel.querySelector('.dy-model').value = cfg.model || '';
+      const st = settingsPanel.querySelector('.dy-cfgstate');
+      st.textContent = cfg && cfg.hasKey ? `钥匙已配置（尾号${cfg.keyTail}）` : '未配置钥匙（代班只会说占位话）';
+    } catch (e) {
+      settingsPanel.querySelector('.dy-cfgstate').textContent = '信局不在家，读不到当前配置';
+    }
+    settingsPanel.style.display = 'flex';
+  }
+
   V.root.querySelector('.dafeiyu-toolbar').addEventListener('click', async (e) => {
     const act = e.target?.dataset?.act;
     if (!act) return;
     e.stopPropagation();
     if (act === 'chat') {
       feedPanel.style.display = 'none'; // 面板互斥
+      settingsPanel.style.display = 'none';
       window.DafeiyuChat.open();
     }
     if (act === 'feed') {
       const showing = feedPanel.style.display === 'flex';
       window.DafeiyuChat.close(); // 面板互斥
+      settingsPanel.style.display = 'none';
       refreshIntimacy();
       feedPanel.style.display = showing ? 'none' : 'flex';
     }
     if (act === 'gear') {
-      sizeIdx = (sizeIdx + 1) % SIZES.length;
-      await chrome.storage.local.set({ pet_scale: SIZES[sizeIdx] }); // onChanged 驱动 setScale
+      const showing = settingsPanel.style.display === 'flex';
+      window.DafeiyuChat.close();
+      feedPanel.style.display = 'none';
+      if (showing) settingsPanel.style.display = 'none';
+      else await openSettings();
+    }
+  });
+
+  settingsPanel.querySelector('.dy-size').addEventListener('change', async (e) => {
+    await chrome.storage.local.set({ pet_scale: Number(e.target.value) || 1 }); // onChanged 驱动 setScale
+  });
+  settingsPanel.querySelector('.dy-close').addEventListener('click', () => { settingsPanel.style.display = 'none'; });
+  settingsPanel.querySelector('.dy-save').addEventListener('click', async () => {
+    const keep = Math.max(4, Math.min(40, Number(settingsPanel.querySelector('.dy-ctxkeep').value) || 12));
+    await chrome.storage.local.set({ ctx_keep: keep });
+    const payload = {
+      baseUrl: settingsPanel.querySelector('.dy-baseurl').value.trim(),
+      model: settingsPanel.querySelector('.dy-model').value.trim(),
+    };
+    const apiKey = settingsPanel.querySelector('.dy-apikey').value.trim();
+    if (apiKey) payload.apiKey = apiKey; // 留空 = 不改动已存钥匙
+    const st = settingsPanel.querySelector('.dy-cfgstate');
+    st.textContent = '保存中…';
+    try {
+      const res = await window.DafeiyuMailbox.standinSet(payload);
+      if (res && res.ok) {
+        st.textContent = res.hasKey ? `已保存 ✓（钥匙尾号${res.keyTail}）` : '已保存 ✓（代班暂无钥匙）';
+        settingsPanel.querySelector('.dy-apikey').value = '';
+      } else {
+        st.textContent = '保存失败：信局不在家？';
+      }
+    } catch (e) {
+      st.textContent = '保存失败：信局不在家？';
     }
   });
 
@@ -228,6 +301,16 @@
   panel.style.display = 'none'; // 显式初始隐藏：面板平时由 CSS 隐藏，内联值为空会让旧版 isOpen() 恒真
   const log = panel.querySelector('.dafeiyu-chat-log');
   const conversationContext = [];
+  // 上下文保留条数：设置面板可调（审查主人提案），默认 12，范围 4~40
+  let ctxKeep = 12;
+  chrome.storage.local.get('ctx_keep').then(({ ctx_keep: k = 12 }) => {
+    ctxKeep = Math.max(4, Math.min(40, Number(k) || 12));
+  });
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area === 'local' && ch.ctx_keep) {
+      ctxKeep = Math.max(4, Math.min(40, Number(ch.ctx_keep.newValue) || 12));
+    }
+  });
   window.DafeiyuChat = {
     isOpen: () => getComputedStyle(panel).display !== 'none', // 计算样式：内联为空时旧写法恒真，曾让内容气泡与散步闲话永久静默
     open() { panel.style.display = 'flex'; log.scrollTop = log.scrollHeight; },
@@ -244,8 +327,10 @@
       while (log.children.length > 50) log.removeChild(log.firstChild);
       log.scrollTop = log.scrollHeight;
       conversationContext.push({ who, text });
-      // 审查#10：上下文只裁显示不裁存储会无限膨胀，这里同步裁剪存储
-      if (conversationContext.length > 24) conversationContext.splice(0, conversationContext.length - 12);
+      // 审查#10 + 主人提案：存储裁剪阈值由设置面板 ctx_keep 驱动
+      if (conversationContext.length > ctxKeep + 6) {
+        conversationContext.splice(0, conversationContext.length - ctxKeep);
+      }
     },
   };
 
@@ -307,6 +392,7 @@
     if (e.key === 'Escape') {
       panel.style.display = 'none';
       feedPanel.style.display = 'none';
+      settingsPanel.style.display = 'none';
       modeMenu.style.display = 'none';
     }
   });
@@ -314,6 +400,7 @@
     const inside = (el) => el.contains(e.target);
     if (panel.style.display !== 'none' && !inside(panel) && !inside(V.root)) panel.style.display = 'none';
     if (feedPanel.style.display !== 'none' && !inside(feedPanel) && !inside(V.root)) feedPanel.style.display = 'none';
+    if (settingsPanel.style.display !== 'none' && !inside(settingsPanel) && !inside(V.root)) settingsPanel.style.display = 'none';
   }, true);
 
   setInterval(refreshIntimacy, 5000);
