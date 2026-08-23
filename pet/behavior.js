@@ -192,8 +192,8 @@
     try { c = window.DafeiyuSenses.content(); } catch (e) { return; }
     if (!c || !c.kind || !c.title) return;
     const sig = c.kind + '|' + c.title;
+    const isFirstOfThisPage = lastSig === '';
     if (sig === lastSig) return;
-    const first = lastSig === '';
     lastSig = sig;
 
     // 本地即时反应：模板填真实标题（80%概率，聊天中不打扰）
@@ -204,16 +204,22 @@
         V.showBubble(line, 5200, c.kind === 'video' ? 'happy' : 'think');
       }
     }
-    // 事件上报（首次注入页面时不上报，避免每次刷新都打扰本鱼）
-    if (!first) {
-      window.DafeiyuMailbox.outbox({
-        type: 'browser_event',
-        kind: c.kind,
-        title: c.title,
-        origin: location.origin,
-        excerpt: (c.excerpt || '').slice(0, 160),
-      });
-    }
+    // 事件上报：同签名去重（浏览器会话级，storage.session），新内容必报
+    (async () => {
+      try {
+        const { seenSigs = [] } = await chrome.storage.session.get({ seenSigs: [] });
+        if (seenSigs.includes(sig)) return;
+        seenSigs.push(sig);
+        await chrome.storage.session.set({ seenSigs: seenSigs.slice(-20) });
+        window.DafeiyuMailbox.outbox({
+          type: 'browser_event',
+          kind: c.kind,
+          title: c.title,
+          origin: location.origin,
+          excerpt: (c.excerpt || '').slice(0, 160),
+        });
+      } catch (e) { /* 存储异常时静默 */ }
+    })();
   }, 10e3);
 
   // ---- 信件派发（background 独家）----
