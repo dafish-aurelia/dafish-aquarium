@@ -213,10 +213,11 @@
     '<input type="text" class="dy-input" placeholder="跟她说点什么…">' +
     '<button class="dy-send">说</button></div>';
   document.documentElement.appendChild(panel);
+  panel.style.display = 'none'; // 显式初始隐藏：面板平时由 CSS 隐藏，内联值为空会让旧版 isOpen() 恒真
   const log = panel.querySelector('.dafeiyu-chat-log');
   const conversationContext = [];
   window.DafeiyuChat = {
-    isOpen: () => panel.style.display !== 'none',
+    isOpen: () => getComputedStyle(panel).display !== 'none', // 计算样式：内联为空时旧写法恒真，曾让内容气泡与散步闲话永久静默
     open() { panel.style.display = 'flex'; log.scrollTop = log.scrollHeight; },
     close() { panel.style.display = 'none'; },
     append(who, text) {
