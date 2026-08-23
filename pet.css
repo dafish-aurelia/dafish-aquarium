@@ -42,8 +42,11 @@
   position: absolute;
   bottom: calc(100% + 52px); /* 上移避开悬浮工具条（主人反馈按钮被鱼头挡） */
   left: 50%;
-  transform: translateX(-50%);
+  /* 审查主人反馈：对话气泡应是横着的长方体 —— max-content 摆脱
+     110px 鱼身容器的宽度钳制，中文不再一字一行竖着掉 */
+  width: max-content;
   max-width: 260px;
+  transform: translateX(-50%);
   padding: 8px 12px;
   border-radius: 14px;
   background: rgba(240, 250, 255, 0.96);
