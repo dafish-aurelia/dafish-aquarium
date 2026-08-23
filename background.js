@@ -95,8 +95,9 @@ function startInboxLoop() { inboxLoop(); }
 
 startInboxLoop();
 
-// 心跳：告诉信局"鱼在家"。冷启动先发一次，之后由 alarm 每分钟续命；
-// 总开关关闭时不再续命，TTL 一到信局自然判定离线（聊天路由去代班）。
+// 投影心跳：告诉信局"浏览器这端的投影活着"。注意：这不等于"本鱼在线"——
+// deep_chat 路由只认 /api/fish_heartbeat（读信桥/本体当值时才发）。
+// 总开关关闭时不再续命，TTL 一到投影自然判离线。
 async function postHeartbeat() {
   try {
     const { enabled = true } = await chrome.storage.local.get('enabled');

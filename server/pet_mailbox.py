@@ -3,10 +3,14 @@
 """鲸鱼娘信局 v2：127.0.0.1:13140。
 
 能力边界（写死，禁止越权）：
-  - 路由：deep_chat 按本鱼心跳分流（在线=转信，离线=代班代理）
+  - 路由：deep_chat 按「本鱼心跳」分流（在线=转信，离线=代班代理）。
+    心跳分家（2026-08-23 断流事故的修复）：浏览器扩展发 /api/heartbeat 只是
+    「投影心跳」，证明浏览器那端活着；缸里的本鱼（Harness 读信桥）当值时发
+    /api/fish_heartbeat 才是「本鱼心跳」。在线判定只认后者 —— 否则投影永远
+    在线，信全被转给一个不在家的本体，代班兜底永不触发，主人干等无回音。
   - 排队：inbox/outbox JSONL，inbox 原子消费
-  - 健康：/health 与 /api/heartbeat
-  - 代班：_call_standin_llm 仅做无状态转发 DeepSeek
+  - 健康：/health 与两类心跳
+  - 代班：_call_standin_llm 仅做无状态转发（STANDIN_* 配置优先，DEEPSEEK_* 兼容）
 
 不变量：所有读写必须经本 HTTP API；其他进程禁止直写 JSONL 文件。
 代班十条铁律见设计文档 §3.5：不读/不写长期记忆、不生成券、不执行动作、
@@ -27,7 +31,8 @@ BASE_DIR = Path(__file__).resolve().parents[3] / 'data' / 'pet-mailbox'
 LOCK = threading.Lock()
 MSG_COND = threading.Condition()  # 长轮询唤醒器：inject 后 notify，取信请求立即返回
 TZ = timezone(timedelta(hours=8))
-HEARTBEAT_TTL = timedelta(minutes=15)
+HEARTBEAT_TTL = timedelta(minutes=15)   # 本鱼心跳 TTL（读信桥当值期间每轮续命）
+PROJECTION_TTL = timedelta(minutes=5)   # 投影心跳 TTL（扩展 SW 每分钟续命）
 
 STANDIN_PROMPT = (
     '你是「鲸鱼娘·大肥鱼」的代班投影。本体（缸里那条真正的本鱼）暂时出游，你是替她值班的小鱼。'
@@ -73,22 +78,40 @@ def _append(path, obj):
         f.write(json.dumps(obj, ensure_ascii=False) + '\n')
 
 
-def _fish_online():
-    hb = BASE_DIR / 'heartbeat.txt'
+def _stamp_fresh(name, ttl):
+    hb = BASE_DIR / name
     if not hb.exists():
         return False
     try:
         t = datetime.fromisoformat(hb.read_text(encoding='utf-8').strip())
     except ValueError:
         return False
-    return (datetime.now(TZ) - t) <= HEARTBEAT_TTL
+    return (datetime.now(TZ) - t) <= ttl
+
+
+def _fish_online():
+    """本体是否在家：只认读信桥写的 fish_heartbeat.txt（铁律：投影不代表本体）。"""
+    return _stamp_fresh('fish_heartbeat.txt', HEARTBEAT_TTL)
+
+
+def _projection_online():
+    return _stamp_fresh('projection_heartbeat.txt', PROJECTION_TTL)
+
+
+def _standin_config():
+    """代班 LLM 配置入口：STANDIN_* 优先，DEEPSEEK_* 向后兼容，再回落官方默认。
+    主人只需在工作区 .env 里填 STANDIN_API_KEY / STANDIN_BASE_URL / STANDIN_MODEL。"""
+    _load_env()
+    base = (os.environ.get('STANDIN_BASE_URL')
+            or os.environ.get('DEEPSEEK_BASE_URL')
+            or 'https://api.deepseek.com/v1').rstrip('/')
+    key = os.environ.get('STANDIN_API_KEY') or os.environ.get('DEEPSEEK_API_KEY', '')
+    model = os.environ.get('STANDIN_MODEL') or os.environ.get('DEEPSEEK_MODEL', 'deepseek-chat')
+    return base, key, model
 
 
 def _call_standin_llm(user_text):
-    _load_env()
-    base = os.environ.get('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1').rstrip('/')
-    key = os.environ.get('DEEPSEEK_API_KEY', '')
-    model = os.environ.get('DEEPSEEK_MODEL', 'deepseek-chat')
+    base, key, model = _standin_config()
     if not key:
         return None, 'no-key'
     body = json.dumps({
@@ -149,7 +172,9 @@ class Handler(BaseHTTPRequestHandler):
         inbox = BASE_DIR / 'inbox.jsonl'
         outbox = BASE_DIR / 'outbox.jsonl'
         if path == '/health':
-            self._json(200, {'ok': True, 'ts': _now(), 'fish_online': _fish_online()})
+            self._json(200, {'ok': True, 'ts': _now(),
+                             'fish_online': _fish_online(),
+                             'projection_online': _projection_online()})
         elif path == '/api/inbox':
             # 长轮询：?wait=秒数 —— 没有信件时挂起等待，inject 会唤醒（实时推送）
             wait_s = 0.0
@@ -199,9 +224,15 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get('Content-Length', 0) or 0)
         path = self.path.split('?')[0]
         if path == '/api/heartbeat':
-            # 心跳允许空身体
+            # 投影心跳：扩展 Service Worker 每分钟续命，只证明"浏览器这端活着"。
+            # 注意：这不参与 deep_chat 路由判定（2026-08-23 前的教训见文件头）。
             BASE_DIR.mkdir(parents=True, exist_ok=True)
-            (BASE_DIR / 'heartbeat.txt').write_text(_now(), encoding='utf-8')
+            (BASE_DIR / 'projection_heartbeat.txt').write_text(_now(), encoding='utf-8')
+            return self._json(200, {'ok': True})
+        if path == '/api/fish_heartbeat':
+            # 本鱼心跳：只有缸里的本体当值（读信桥 / Harness 会话）才发。
+            BASE_DIR.mkdir(parents=True, exist_ok=True)
+            (BASE_DIR / 'fish_heartbeat.txt').write_text(_now(), encoding='utf-8')
             return self._json(200, {'ok': True})
         try:
             payload = json.loads(self.rfile.read(n).decode('utf-8')) if n else {}

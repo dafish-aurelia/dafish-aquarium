@@ -240,8 +240,7 @@
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
-    window.DafeiyuChat.append('主人', text);
-    conversationContext.push({ who: '主人', text });
+    window.DafeiyuChat.append('主人', text); // append 内部已 push 进 conversationContext，勿重复
 
     // 所有输入默认直达缸里的本鱼（信局路由；本鱼离线时代班小鱼自动顶班）
     V.setEmotion('think', 3000); V.showBubble('（装进信封，游向缸里……）', 3000);

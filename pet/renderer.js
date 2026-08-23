@@ -5,7 +5,7 @@
 
   const root = document.createElement('div');
   root.id = 'dafeiyu-root';
-  root.dataset.dyBuild = 'cs-0.3.5'; // 构建标记：主世界可读，用于验证内容脚本是否从磁盘重读
+  root.dataset.dyBuild = 'cs-0.3.8'; // 构建标记：主世界可读，用于验证内容脚本是否从磁盘重读
   const toolbar = document.createElement('div');
   toolbar.className = 'dafeiyu-toolbar';
   toolbar.innerHTML =

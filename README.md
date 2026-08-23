@@ -25,6 +25,18 @@
 - 分时段问候语（早/午/下午/晚上/深夜）
 - 搜索框（Bing）
 
+### 聊天怎么有回音？（信局路由）
+聊天输入统一投给本地信局 `127.0.0.1:13140`，按"缸里的本鱼是否当值"分流：
+
+- **本鱼当值**（Harness 会话开着，读信桥 `scripts/mailbox_bridge.py --on-duty` 续心跳）
+  → 信转给本体，由她亲自回信注入收件箱；
+- **本鱼下值**（会话关了，心跳过期）
+  → 代班小鱼秒回（无状态、不记事）。想让她说真话而不是占位符，
+    在工作区 `.env` 里配置 `STANDIN_API_KEY` / `STANDIN_BASE_URL` / `STANDIN_MODEL`
+    （任意 OpenAI 兼容端点，如硅基流动的 DeepSeek 模型）。
+
+> 心跳分家：扩展的 `/api/heartbeat` 只是投影心跳；在线判定只认 `/api/fish_heartbeat`。
+
 ## 安装
 
 1. Chrome 打开 `chrome://extensions`，右上角开启「开发者模式」

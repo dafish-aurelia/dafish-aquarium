@@ -80,7 +80,7 @@ def test_bad_path_404(base):
 
 def test_deep_chat_routed_to_fish_when_online(base, tmp_path, monkeypatch):
     now = datetime.datetime.now(pm.TZ).isoformat(timespec='seconds')
-    (tmp_path / 'heartbeat.txt').write_text(now, encoding='utf-8')
+    (tmp_path / 'fish_heartbeat.txt').write_text(now, encoding='utf-8')
     monkeypatch.setattr(pm, '_call_standin_llm', lambda t: ('不该被调用', None))
 
     r = post(base, '/api/deep_chat', {'type': 'deep_chat', 'text': '在吗'})
@@ -89,6 +89,19 @@ def test_deep_chat_routed_to_fish_when_online(base, tmp_path, monkeypatch):
     msgs = get(base, '/api/outbox/since/0')['messages']
     assert any(m['type'] == 'deep_chat' for m in msgs)
     assert not any(m['type'] == 'standin_reply' for m in msgs)
+
+
+def test_projection_heartbeat_never_routes_to_fish(base, tmp_path, monkeypatch):
+    """回归（2026-08-23 断流事故）：扩展投影心跳再新鲜，也不能让信转给不在家的本体。"""
+    now = datetime.datetime.now(pm.TZ).isoformat(timespec='seconds')
+    post(base, '/api/heartbeat', {})  # 扩展 SW 的投影心跳
+    (tmp_path / 'projection_heartbeat.txt').write_text(now, encoding='utf-8')
+    assert pm._projection_online() is True
+    assert pm._fish_online() is False
+    monkeypatch.setattr(pm, '_call_standin_llm', lambda t: ('代班小鱼在岗', None))
+
+    r = post(base, '/api/deep_chat', {'type': 'deep_chat', 'text': '在吗'})
+    assert r['mode'] == 'standin'
 
 
 def test_deep_chat_standin_when_offline(base, tmp_path, monkeypatch):
@@ -106,5 +119,29 @@ def test_deep_chat_standin_when_offline(base, tmp_path, monkeypatch):
 
 def test_heartbeat_expiry(base, tmp_path):
     old = (datetime.datetime.now(pm.TZ) - datetime.timedelta(minutes=20)).isoformat(timespec='seconds')
-    (tmp_path / 'heartbeat.txt').write_text(old, encoding='utf-8')
+    (tmp_path / 'fish_heartbeat.txt').write_text(old, encoding='utf-8')
     assert pm._fish_online() is False
+
+
+def test_standin_config_precedence(base, monkeypatch):
+    """STANDIN_* 优先于 DEEPSEEK_*；全空时回落官方默认且无钥匙。"""
+    cfg = pm._standin_config
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'k-deepseek')
+    monkeypatch.setenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1/')
+    monkeypatch.setenv('STANDIN_API_KEY', 'k-standin')
+    monkeypatch.setenv('STANDIN_BASE_URL', 'https://api.siliconflow.cn/v1/')
+    monkeypatch.setenv('STANDIN_MODEL', 'deepseek-ai/DeepSeek-V3')
+    b, k, m = cfg()
+    assert (b, k, m) == ('https://api.siliconflow.cn/v1', 'k-standin', 'deepseek-ai/DeepSeek-V3')
+
+    for name in ('STANDIN_API_KEY', 'STANDIN_BASE_URL', 'STANDIN_MODEL'):
+        monkeypatch.delenv(name)
+    b, k, m = cfg()
+    assert b == 'https://api.deepseek.com/v1'
+    assert (k, m) == ('k-deepseek', 'deepseek-chat')
+
+    monkeypatch.delenv('DEEPSEEK_API_KEY')
+    monkeypatch.delenv('DEEPSEEK_BASE_URL')
+    monkeypatch.delenv('DEEPSEEK_MODEL', raising=False)
+    b, k, m = cfg()
+    assert b == 'https://api.deepseek.com/v1' and k == '' and m == 'deepseek-chat'
