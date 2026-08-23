@@ -82,14 +82,21 @@
   V.img.addEventListener('pointerup', endDrag);
   V.img.addEventListener('pointercancel', () => { dragging = false; });
 
-  // 单击 = 蹦跳吐槽；双击 = 投喂台（摸头后的那次点击不触发）
+  // 单击 = 蹦跳吐槽；双击 = 投喂台。
+  // 审查#3：浏览器里双击会先连发两次 click 再触发 dblclick，
+  // 用 260ms 判定窗仲裁——双击到达时取消挂起的单击动作，不再白白蹦跳说话。
+  let clickTimer = null;
   V.img.addEventListener('click', () => {
     if (moved || touched) { touched = false; return; }
-    V.setSprite('正面.png', false);
-    V.hop();
-    V.showBubble(B.pickQuip(), 3500);
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      V.setSprite('正面.png', false);
+      V.hop();
+      V.showBubble(B.pickQuip(), 3500);
+    }, 260);
   });
   V.img.addEventListener('dblclick', () => {
+    clearTimeout(clickTimer);
     window.DafeiyuChat.close(); // 面板互斥
     refreshIntimacy();
     feedPanel.style.display = feedPanel.style.display === 'flex' ? 'none' : 'flex';
@@ -193,7 +200,6 @@
       // 暂时隐身让出点击区域，期间完全穿透；结束后按状态回归
       V.root.style.display = 'none';
       window.__dafeiyuVisible = false;
-      V.showBubble; // noop
       setTimeout(() => { V.renderVisible(); }, 8000);
     } else if (m) {
       B.setMode(m);
@@ -232,6 +238,8 @@
       while (log.children.length > 50) log.removeChild(log.firstChild);
       log.scrollTop = log.scrollHeight;
       conversationContext.push({ who, text });
+      // 审查#10：上下文只裁显示不裁存储会无限膨胀，这里同步裁剪存储
+      if (conversationContext.length > 24) conversationContext.splice(0, conversationContext.length - 12);
     },
   };
 

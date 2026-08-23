@@ -2,8 +2,72 @@
   const V = window.DafeiyuView;
   if (!V) return;
 
-  let quips = [];
-  let hearts = [];
+  // 台词内置（审查#7：web_accessible_resources 的 JSON 可被任意站点探测扩展指纹）。
+  // sleepy 池保留作数据资产；当前 scene() 不再返回 sleepy（深夜困困模式属旧版行为）。
+  const BUNDLED_QUIPS = {
+    generic: [
+      '唔……主人在看什么呀？',
+      '本鱼今天也在缸里游得很圆。',
+      '咕噜噜……（吐泡泡）',
+      '主人主人，水温刚好哦。',
+      '这条网页有点干，本鱼帮你加点水。',
+      '唔？主人往这边看一眼嘛。',
+      '本鱼没有偷懒，只是在待机。'
+    ],
+    chill: [
+      '这片网页的水温刚刚好，适合躺平。',
+      '唔——主人有事快讲，本鱼正在晒太阳。',
+      '哼，本鱼才不是在摸鱼，本鱼是在巡逻珊瑚礁！',
+      '别戳啦，戳本鱼也不会多一口白米饭的咕噜…',
+      '你、你别一直盯着本鱼看啦，会害羞的…'
+    ],
+    work: [
+      '主人在认真干活！本鱼…本鱼也有在认真巡逻哦。',
+      '代码要好好写，白米饭要好好吃，咕噜。',
+      '嗯嗯，这个仓库看起来很棒（其实本鱼没看懂）。',
+      '遇到 bug 了吗？本鱼帮你瞪它！'
+    ],
+    video: [
+      '陪主人看剧～音量记得调小声一点哦。',
+      '这部电影里有鲸鱼吗？没有的话本鱼亲自出演。',
+      '嘘……别告诉别人本鱼在偷看。',
+      '看到精彩的地方记得叫本鱼一起看！'
+    ],
+    sleepy: [
+      '唔唔……主人，都几点了，该睡觉了啦…',
+      '本鱼把咸鱼干叼来了，吃完就睡，不许熬夜。'
+    ],
+    video_tpl: [
+      '《{title}》！本鱼也一起看～',
+      '这部《{title}》看起来很有料的样子。',
+      '{title}？看完跟本鱼讲讲嘛。',
+      '换台《{title}》了？之前的看完了吗～'
+    ],
+    novel_tpl: [
+      '《{title}》追到哪章啦？别太晚睡哦。',
+      '又在看《{title}》呀，好看吗？',
+      '看《{title}》记得开灯，不然本鱼会担心。',
+      '《{title}》……主角还活着吗？（小声）'
+    ]
+  };
+  const BUNDLED_HEARTS = [
+    '水温二十四度，适合摸鱼。',
+    '今天的白米饭好香……不对，是这个网页好香。',
+    '主人点页面的样子，好像在投喂本鱼。',
+    '泡泡……咕噜噜……',
+    '这条鱼的工位真大，整个浏览器都是。',
+    '唔，那个链接看起来很好吃。',
+    '值班日志：一切正常。除了有点想你。',
+    '如果本鱼有口袋，会把今天的开心存进去。',
+    '深海没有日历，但有主人打开的次数。',
+    '刚才那条弹窗吓本鱼一跳……装镇定。',
+    '游累了吗主人？本鱼可以陪你发呆。',
+    '听说双击会有好事发生……骗你的，是单击。',
+    '本鱼的思维链好长啊……算了不想了。',
+    '今天也在认真待机中，请放心摸鱼。'
+  ];
+  let quips = BUNDLED_QUIPS;
+  let hearts = BUNDLED_HEARTS;
   const tickets = [];
   let lastQuip = 0;
   let lastDeep = 0;
@@ -30,9 +94,6 @@
       !chatOpen();
   }
 
-  fetch(chrome.runtime.getURL('quip.json')).then((r) => r.json()).then((q) => { quips = q; }).catch(() => {});
-  fetch(chrome.runtime.getURL('quip_heart.json')).then((r) => r.json()).then((q) => { hearts = q; }).catch(() => {});
-
   function pick(arr) { return arr.length ? arr[Math.floor(Math.random() * arr.length)] : ''; }
 
   // 场景感知台词：70% 说应景的话（工作/看剧/摸鱼），30% 用通用池
@@ -48,7 +109,7 @@
   }
 
   // 心情徽章跟随场景刷新（☀️摸鱼 💼工作 🍿看剧 🏠在家）
-  const SCENE_BADGE = { chill: '☀️', work: '💼', video: '🍿', home: '🏠', sleepy: '💤' };
+  const SCENE_BADGE = { chill: '☀️', work: '💼', video: '🍿', novel: '📖', home: '🏠', sleepy: '💤' };
   setInterval(() => {
     const s = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
     if (V.W.state === 'SLEEP') V.setBadge('💤');
@@ -59,7 +120,7 @@
   function isHome() {
     try {
       return decodeURIComponent(location.href)
-        .startsWith('file:///G:/life/Aurelia的工作区/browser/start.html');
+        .startsWith(window.DafeiyuSanitize.HOME_URL);
     } catch (e) { return false; }
   }
   function homeWelcome() {
@@ -81,6 +142,7 @@
   chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) { mode = pet_mode; V.W.mode = pet_mode; } });
 
   document.addEventListener('pointermove', (e) => {
+    lastActivity = Date.now(); // 审查#2：唤醒必须重置空闲计时，否则 10 分钟后永远秒睡
     followX = e.clientX;
     followY = e.clientY;
     // 主人长时间没动静 → 她打瞌睡；一有动静就醒
@@ -164,25 +226,8 @@
     }, 40);
   }, 4000 + Math.random() * 5000);
 
-  // follow 专用平滑循环：独立于散步调度器，随时响应鼠标（80ms 一帧）
-  setInterval(() => {
-    if (mode !== 'follow') {
-      if (V.W.state === 'FOLLOW') V.W.state = 'IDLE'; // 自愈：模式切走后复位残留
-      return;
-    }
-    if (!isActive()) return;
-    if (followX == null || chatOpen()) return;
-    const dx = followX - V.W.x;
-    if (Math.abs(dx) <= 16) {
-      if (V.W.state === 'FOLLOW') { V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
-      return;
-    }
-    V.W.dir = dx > 0 ? 1 : -1;
-    V.W.state = 'FOLLOW';
-    V.setSprite('侧面.png', V.W.dir > 0);
-    V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 2.5));
-    V.root.style.left = V.W.x + 'px';
-  }, 80);
+  // （审查#1）第二段 follow 循环已删除：与上方二维跟随循环重复，
+  // 双定时器叠加会把横移速度叠成 5.5px/帧、纵横逻辑互相打架。
 
   // ---- 内容感知陪伴：新视频/新章节 → 本地模板即时反应 + 事件上报给缸里的本鱼 ----
   let lastSig = '';

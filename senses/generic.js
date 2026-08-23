@@ -7,7 +7,7 @@
   function homeNow() {
     try {
       return decodeURIComponent(location.href)
-        .startsWith('file:///G:/life/Aurelia的工作区/browser/start.html');
+        .startsWith(window.DafeiyuSanitize.HOME_URL);
     } catch (e) { return false; }
   }
 

@@ -18,6 +18,7 @@
 """
 import json
 import os
+import secrets
 import sys
 import time
 import threading
@@ -78,6 +79,29 @@ def _append(path, obj):
         f.write(json.dumps(obj, ensure_ascii=False) + '\n')
 
 
+_TOKEN = None
+
+
+def _auth_token():
+    """共享密钥（审查#6）：首次生成并落盘 auth_token.txt，此后常驻内存。
+    除 /api/token（Host 钉扎）外，所有 /api/* 端点都必须携带 X-Dafeiyu-Token。
+    自定义头会触发 CORS 预检而本局从不回 ACAO —— 跨站脚本天然过不去。"""
+    global _TOKEN
+    if _TOKEN:
+        return _TOKEN
+    path = BASE_DIR / 'auth_token.txt'
+    try:
+        t = path.read_text(encoding='utf-8').strip()
+    except OSError:
+        t = ''
+    if not t:
+        t = secrets.token_hex(16)
+        BASE_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text(t, encoding='utf-8')
+    _TOKEN = t
+    return t
+
+
 def _stamp_fresh(name, ttl):
     hb = BASE_DIR / name
     if not hb.exists():
@@ -135,17 +159,56 @@ def _call_standin_llm(user_text):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _authorized(self):
+        tok = self.headers.get('X-Dafeiyu-Token', '')
+        if tok and secrets.compare_digest(tok, _auth_token()):
+            return True
+        self._json(401, {'error': 'unauthorized'})
+        return False
+
     def _pop_inbox(self):
-        """原子弹出全部待投递消息（锁内读+改名）。"""
-        inbox = BASE_DIR / 'inbox.jsonl'
+        """原子弹出全部待投递消息（锁内读+清空）。
+
+        Windows 加固（审查#4）：不再用 rename 做消费标记——上次崩溃残留的
+        inbox.consumed.jsonl 会让 rename 抛 FileExistsError，收信从此永久 500；
+        且旧实现"先改名后解析"，一行坏 JSON 就让整批信滞留。现改为锁内：
+        回收残留 → 整体读取 → 清空 → 逐行解析，坏行隔离进 inbox.bad.jsonl 留证。
+        """
         with LOCK:
+            inbox = BASE_DIR / 'inbox.jsonl'
+            consumed = inbox.with_name('inbox.consumed.jsonl')
+            if consumed.exists():
+                try:
+                    leftover = consumed.read_text(encoding='utf-8').strip()
+                except OSError:
+                    leftover = ''
+                try:
+                    consumed.unlink()
+                except OSError:
+                    pass
+                if leftover:
+                    # 残留是旧信：并回队首保持 FIFO，不能排到新信后面
+                    current = inbox.read_text(encoding='utf-8') if inbox.exists() else ''
+                    merged = leftover + '\n' + current
+                    with open(inbox, 'w', encoding='utf-8') as f:
+                        f.write(merged if merged.endswith('\n') else merged + '\n')
             msgs = []
             if inbox.exists():
-                lines = inbox.read_text(encoding='utf-8').strip().splitlines()
-                consumed = inbox.with_name('inbox.consumed.jsonl')
-                inbox.rename(consumed)  # 原子移走：并发取信不可能重复
-                msgs = [json.loads(l) for l in lines if l.strip()]
-                consumed.unlink()
+                lines = [l for l in inbox.read_text(encoding='utf-8').splitlines() if l.strip()]
+                try:
+                    inbox.unlink()
+                except OSError:
+                    pass
+                bad = []
+                for l in lines:
+                    try:
+                        msgs.append(json.loads(l))
+                    except json.JSONDecodeError:
+                        bad.append(l)
+                if bad:
+                    BASE_DIR.mkdir(parents=True, exist_ok=True)
+                    with open(BASE_DIR / 'inbox.bad.jsonl', 'a', encoding='utf-8') as f:
+                        f.write('\n'.join(bad) + '\n')
             return msgs
 
     def _json(self, code, obj):
@@ -171,6 +234,15 @@ class Handler(BaseHTTPRequestHandler):
         query = parts[1] if len(parts) > 1 else ''
         inbox = BASE_DIR / 'inbox.jsonl'
         outbox = BASE_DIR / 'outbox.jsonl'
+        if path == '/api/token':
+            # 引导端点（审查#6）：Host 钉扎回环地址，DNS rebinding 场景下
+            # 攻击域的 Host 头对不上即 403；直连跨站请求因无 CORS 也读不到响应。
+            host = (self.headers.get('Host') or '').split(':')[0].lower()
+            if host not in ('127.0.0.1', 'localhost', '[::1]'):
+                return self._json(403, {'error': 'bad host'})
+            return self._json(200, {'token': _auth_token()})
+        if not self._authorized():
+            return
         if path == '/health':
             self._json(200, {'ok': True, 'ts': _now(),
                              'fish_online': _fish_online(),
@@ -223,6 +295,8 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_post(self):
         n = int(self.headers.get('Content-Length', 0) or 0)
         path = self.path.split('?')[0]
+        if not self._authorized():
+            return
         if path == '/api/heartbeat':
             # 投影心跳：扩展 Service Worker 每分钟续命，只证明"浏览器这端活着"。
             # 注意：这不参与 deep_chat 路由判定（2026-08-23 前的教训见文件头）。

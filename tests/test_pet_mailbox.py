@@ -26,20 +26,55 @@ def base(tmp_path, monkeypatch):
     srv.shutdown()
 
 
+_TOKS = {}
+
+
+def _token(base):
+    """审查#6：信局全端点鉴权，测试先经 Host 钉扎的 /api/token 引导取钥匙。"""
+    if base not in _TOKS:
+        with urllib.request.urlopen(base + '/api/token') as r:
+            _TOKS[base] = json.loads(r.read())['token']
+    return _TOKS[base]
+
+
 def get(base, path):
-    with urllib.request.urlopen(base + path) as r:
+    req = urllib.request.Request(base + path, headers={'X-Dafeiyu-Token': _token(base)})
+    with urllib.request.urlopen(req) as r:
         return json.loads(r.read())
 
 
 def post(base, path, obj):
     req = urllib.request.Request(base + path, data=json.dumps(obj).encode(),
-                                 headers={'Content-Type': 'application/json'}, method='POST')
+                                 headers={'Content-Type': 'application/json',
+                                          'X-Dafeiyu-Token': _token(base)},
+                                 method='POST')
     with urllib.request.urlopen(req) as r:
         return json.loads(r.read())
 
 
 def test_health(base):
     assert get(base, '/health')['ok'] is True
+
+
+def test_api_rejects_missing_token(base):
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        urllib.request.urlopen(base + '/health')
+    assert ei.value.code == 401
+
+
+def test_api_rejects_wrong_token(base):
+    req = urllib.request.Request(base + '/health', headers={'X-Dafeiyu-Token': 'wrong'})
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        urllib.request.urlopen(req)
+    assert ei.value.code == 401
+
+
+def test_token_endpoint_pins_loopback_host(base):
+    req = urllib.request.Request(base + '/api/token')
+    req.add_header('Host', 'evil.com')  # DNS rebinding 模拟：非回环 Host 一律 403
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        urllib.request.urlopen(req)
+    assert ei.value.code == 403
 
 
 def test_inject_then_inbox_pop_once(base):
@@ -121,6 +156,25 @@ def test_heartbeat_expiry(base, tmp_path):
     old = (datetime.datetime.now(pm.TZ) - datetime.timedelta(minutes=20)).isoformat(timespec='seconds')
     (tmp_path / 'fish_heartbeat.txt').write_text(old, encoding='utf-8')
     assert pm._fish_online() is False
+
+
+def test_pop_inbox_recovers_stale_consumed(base, tmp_path):
+    """审查#4 回归：崩溃残留的 consumed 文件先并回再消费，不丢信也不卡死。"""
+    (tmp_path / 'inbox.consumed.jsonl').write_text(
+        json.dumps({'type': 'proactive', 'text': '残留'}) + '\n', encoding='utf-8')
+    post(base, '/api/inject', {'type': 'reply', 'text': '新信'})
+    msgs = get(base, '/api/inbox')['messages']
+    assert [m['text'] for m in msgs] == ['残留', '新信']
+    assert not (tmp_path / 'inbox.consumed.jsonl').exists()
+
+
+def test_pop_inbox_quarantines_bad_line(base, tmp_path):
+    """审查#4 回归：单行坏 JSON 只隔离留证，不再滞留整批信件。"""
+    good = json.dumps({'type': 'reply', 'text': '好信'})
+    (tmp_path / 'inbox.jsonl').write_text(good + '\n这不是JSON\n', encoding='utf-8')
+    msgs = get(base, '/api/inbox')['messages']
+    assert [m['text'] for m in msgs] == ['好信']
+    assert '这不是JSON' in (tmp_path / 'inbox.bad.jsonl').read_text(encoding='utf-8')
 
 
 def test_standin_config_precedence(base, monkeypatch):

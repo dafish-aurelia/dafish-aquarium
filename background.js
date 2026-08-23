@@ -60,6 +60,34 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 let inboxLoopRunning = false;
+
+// 审查#5：inbox 是即焚队列，旧实现只投活跃 Tab 且失败即弃 = 无声蒸发。
+// 改为广播所有能收信的 Tab（她在每个页面都在）；全灭（如只剩 chrome:// 页）
+// 时回存信局，60 秒内不重复回存，防"取信-失败-回存-再取信"热循环。
+let _lastRequeueAt = 0;
+async function deliverToTabs(m) {
+  const msg = { type: 'PET_MESSAGE', kind: m.type, text: m.text || '' };
+  const tabs = await chrome.tabs.query({});
+  let delivered = 0;
+  for (const t of tabs) {
+    if (t.id == null) continue;
+    try {
+      await chrome.tabs.sendMessage(t.id, msg);
+      delivered++;
+    } catch (e) { /* 该 Tab 没有内容脚本，正常 */ }
+  }
+  if (delivered === 0 && Date.now() - _lastRequeueAt > 60000) {
+    _lastRequeueAt = Date.now();
+    try {
+      await mbJson('/api/inject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(m),
+      });
+    } catch (e) { /* 回存也失败：这封信只能放弃 */ }
+  }
+}
+
 async function inboxLoop() {
   if (inboxLoopRunning) return;
   inboxLoopRunning = true;
@@ -71,15 +99,10 @@ async function inboxLoop() {
         continue;
       }
       try {
-        const base = await mailboxBase();
-        const r = await fetch(base + '/api/inbox?wait=25'); // 长轮询：挂起等信，最长25秒
+        const r = await mbFetch('/api/inbox?wait=25'); // 长轮询：挂起等信，最长25秒
         const data = await r.json();
         for (const m of data.messages || []) {
-          chrome.tabs.sendMessage(prevActiveTabId, {
-            type: 'PET_MESSAGE',
-            kind: m.type,
-            text: m.text || '',
-          }).catch(() => {});
+          await deliverToTabs(m);
         }
       } catch (e) {
         await new Promise((r) => setTimeout(r, 5000)); // 信局不在家：低频重试
@@ -108,14 +131,35 @@ async function postHeartbeat() {
 chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
 postHeartbeat();
 
-async function mailboxBase() {
-  const { mailboxPort } = await chrome.storage.local.get('mailboxPort');
-  return `http://127.0.0.1:${mailboxPort || PORT_DEFAULT}`;
+// 信局地址钉死（审查#11：mailboxPort 全工程无写入方，属幽灵配置，删除读取分支）
+function mailboxBase() {
+  return `http://127.0.0.1:${PORT_DEFAULT}`;
 }
 
+// 共享密钥（审查#6）：经 Host 钉扎的 /api/token 引导获取，此后每个请求都带上；
+// 遇 401 清缓存重新引导一次，防止钥匙轮换后永久毒化。
+let _tokenPromise = null;
+async function authToken() {
+  if (!_tokenPromise) {
+    _tokenPromise = fetch(mailboxBase() + '/api/token')
+      .then((r) => r.json())
+      .then((j) => j.token || '')
+      .catch(() => '');
+  }
+  return _tokenPromise;
+}
+
+async function mbFetch(path, opts = {}) {
+  const token = await authToken();
+  const headers = Object.assign({}, opts.headers || {}, token ? { 'X-Dafeiyu-Token': token } : {});
+  const res = await fetch(mailboxBase() + path, Object.assign({}, opts, { headers }));
+  if (res.status === 401) invalidateToken();
+  return res;
+}
+function invalidateToken() { _tokenPromise = null; }
+
 async function mbJson(path, opts) {
-  const base = await mailboxBase();
-  const r = await fetch(base + path, opts);
+  const r = await mbFetch(path, opts);
   return r.json();
 }
 
