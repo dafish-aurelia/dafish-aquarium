@@ -52,9 +52,11 @@ chrome.action.onClicked.addListener(async () => {
 // 独家收信：长轮询循环（信到秒推）。alarm 仅作看门狗，循环死了就拉起来。
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create('pet-poll', { periodInMinutes: 1 });
+  chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 });
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'pet-poll') startInboxLoop();
+  if (alarm.name === 'pet-heartbeat') postHeartbeat();
 });
 
 let inboxLoopRunning = false;
@@ -92,6 +94,18 @@ async function inboxLoop() {
 function startInboxLoop() { inboxLoop(); }
 
 startInboxLoop();
+
+// 心跳：告诉信局"鱼在家"。冷启动先发一次，之后由 alarm 每分钟续命；
+// 总开关关闭时不再续命，TTL 一到信局自然判定离线（聊天路由去代班）。
+async function postHeartbeat() {
+  try {
+    const { enabled = true } = await chrome.storage.local.get('enabled');
+    if (!enabled) return;
+    await mbJson('/api/heartbeat', { method: 'POST' });
+  } catch (e) { /* 信局不在家：静默，等下个 alarm 再试 */ }
+}
+chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
+postHeartbeat();
 
 async function mailboxBase() {
   const { mailboxPort } = await chrome.storage.local.get('mailboxPort');
