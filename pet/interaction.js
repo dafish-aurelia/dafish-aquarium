@@ -500,5 +500,5 @@
     if (settingsPanel.style.display !== 'none' && !inside(settingsPanel) && !inside(V.root)) settingsPanel.style.display = 'none';
   }, true);
 
-  setInterval(refreshIntimacy, 5000);
+  setInterval(() => { if (!window.__dafeiyuRetired) refreshIntimacy(); }, 5000);
 })();

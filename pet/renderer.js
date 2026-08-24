@@ -60,6 +60,7 @@
     if (ctxDead) return true;
     try { chrome.runtime.getManifest(); return false; } catch (e) {
       ctxDead = true;
+      window.__dafeiyuRetired = true; // 兄弟脚本（behavior/interaction）据此各自停摆
       console.warn('[dafeiyu] 扩展已重载，本页旧脚本退役——刷新页面即可恢复');
       return true;
     }
