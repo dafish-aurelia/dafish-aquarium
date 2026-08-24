@@ -219,6 +219,7 @@
     }
     if (mode === 'still') return;
     if (mode === 'follow') return; // 跟随由下方专用平滑循环接管
+    if (videoPlaying) return; // 看剧礼仪：正片播放中不散步，安安静静陪看别挡字幕
     // walk
     const frames = (V.walkFrames && V.walkFrames.length > 1) ? V.walkFrames : null;
     if (!frames) return; // 行走帧未就绪：本轮跳过，等下个调度周期（不再单帧滑行）
@@ -260,19 +261,73 @@
   // 双定时器叠加会把横移速度叠成 5.5px/帧、纵横逻辑互相打架。
 
   // ---- 内容感知陪伴：新视频/新章节 → 本地模板即时反应 + 事件上报给缸里的本鱼 ----
+  // 看剧礼仪（0.5.4）：正片播放中仍可适当说话，但更稀（≥10 分钟且低概率），
+  // 且不走动挡字幕；暂停超 90 秒才轻声关心一句；换集评论限流 30 分钟。
+  const PAUSE_LINES = [
+    '暂停啦？本鱼帮你盯着画面，主人快去喝口水～',
+    '怎么停了？卡住了还是想歇歇？本鱼在呢。',
+    '去忙吧，回来按播放键就好，本鱼哪儿也不去。',
+  ];
+  let videoPlaying = false;
+  let pausedSince = 0;
+  let pauseComforted = false;
+  let lastEpComment = 0;
+  let lastDanmakuReact = 0;
+  // DOM 可读的弹幕关键词共情（canvas 渲染弹幕的站点读不到，自然跳过）
+  const DANMAKU_REACTIONS = [
+    [/前方高能|高能预警/, '（凑近屏幕）高能在哪里哪里？！本鱼也要看！'],
+    [/名场面/, '这就是传说中的名场面吗，本鱼记小本本上了。'],
+    [/哈哈哈哈|笑死/, '主人笑得这么开心，快告诉本鱼是什么梗嘛～'],
+    [/泪目|哭了|破防/, '（默默递纸巾）呜……本鱼只是眼睛里进海水了。'],
+    [/下集|更新呢|催更/, '催更大军+1！本鱼用尾巴帮你按。'],
+  ];
   let lastSig = '';
   const seenSigs = []; // 页面内存级去重：全量导航天然重置；SPA 换内容由签名变化触发
   setInterval(() => {
     if (!isActive() || !window.DafeiyuSenses) return;
     let c;
     try { c = window.DafeiyuSenses.content(); } catch (e) { return; }
+    // 播放状态追踪要在 kind 早退之前做，否则离开视频页后状态永远滞留
+    const playing = !!(c && c.kind === 'video' && c.playing);
+    if (playing !== videoPlaying) {
+      if (!playing && videoPlaying) { pausedSince = Date.now(); pauseComforted = false; }
+      else if (playing) { pausedSince = 0; }
+      videoPlaying = playing;
+    }
+    if (!videoPlaying && pausedSince && !pauseComforted &&
+        Date.now() - pausedSince > 90e3 && !chatOpen()) {
+      pauseComforted = true;
+      V.showBubble(pick(PAUSE_LINES), 6000);
+    }
+    // 实时感知第 1 层（零模型）：播放器状态 + DOM 弹幕关键词
+    if (playing && !chatOpen()) {
+      const vid = document.querySelector('video');
+      if (vid && vid.duration > 60 && vid.currentTime / vid.duration > 0.97 &&
+          vid.dataset.dyNearEnd !== '1') {
+        vid.dataset.dyNearEnd = '1'; // 每个视频只感慨一次，导航后自然重置
+        if (Math.random() < 0.6) V.showBubble('就要看完啦……本鱼有点舍不得，再来一集吗？', 6000);
+      }
+      if (Date.now() - lastDanmakuReact > 8 * 60e3) {
+        const texts = [...document.querySelectorAll('[class*="danmaku"] [class*="text"],[class*="danmaku-item"],.dm-info')]
+          .slice(-12).map((n) => (n.textContent || '').trim()).filter((s) => s && s.length <= 30);
+        const joined = texts.join(' ');
+        for (const [re, line] of DANMAKU_REACTIONS) {
+          if (re.test(joined)) {
+            lastDanmakuReact = Date.now();
+            V.showBubble(line, 5200, 'happy');
+            break;
+          }
+        }
+      }
+    }
     if (!c || !c.kind || !c.title) return;
     const sig = c.kind + '|' + c.title;
     if (sig === lastSig) return;
     lastSig = sig;
 
-    // 本地即时反应：模板填真实标题（80%概率，聊天中不打扰）
-    if (!chatOpen() && Math.random() < 0.8) {
+    // 本地即时反应：模板填真实标题（80%概率、聊天中不打扰、换集限流30分钟）
+    if (!chatOpen() && Math.random() < 0.8 && Date.now() - lastEpComment > 30 * 60e3) {
+      lastEpComment = Date.now();
       const tplPool = QUIPS[c.kind + '_tpl'] || [];
       if (tplPool.length) {
         const line = pick(tplPool).replace(/\{title\}/g, c.title);
@@ -336,6 +391,9 @@
       V.showBubble(t.text, 6000);
       return;
     }
+    // 看剧礼仪：正片播放中闲聊更稀（距上次≥10分钟且仅15%概率）；
+    // 上面的信件券不受此限——本鱼的回信什么时候都要送到
+    if (videoPlaying && (now - lastQuip < 10 * 60e3 || Math.random() > 0.15)) return;
     if (force || Math.random() < 0.3) { lastQuip = now; V.showBubble(pickQuip(), 5000); }
   }
   function armQuipTimer() {
@@ -345,7 +403,7 @@
 
   // ---- 思维链心声：灰色斜体小气泡，独立于搭话冷却，更轻更频 ----
   setInterval(() => {
-    if (!HEARTS.length || !isActive() || chatOpen() || Math.random() > 0.45) return;
+    if (!HEARTS.length || !isActive() || chatOpen() || videoPlaying || Math.random() > 0.45) return;
     const now = Date.now();
     if (now - lastHeart < 3 * 60e3) return;
     lastHeart = now;
