@@ -467,6 +467,7 @@ document.addEventListener('pointermove', (e) => {
       tabSwitchAt = Date.now();
       homeWelcome();
       maybeMemoryQuip();
+      maybeMoodReport();
       return;
     }
     if (msg.type !== 'PET_MESSAGE') return;
@@ -563,12 +564,33 @@ document.addEventListener('pointermove', (e) => {
   let lastMemQuip = 0;
   async function maybeMemoryQuip() {
     const now = Date.now();
-    if (window.__dafeiyuRetired || !isActive() || chatOpen() || now - lastMemQuip < 15 * 60e3 || Math.random() > 0.25) return;
+    if (window.__dafeiyuRetired || !isActive() || chatOpen()) return;
     try {
       const { browse_log = [] } = await chrome.storage.local.get('browse_log');
       const dayAgo = now - 24 * 3600e3;
+      const recent = browse_log.filter((e) => e.t >= dayAgo);
+      // v0.7 行为感知：60 秒内 ≥5 次载入 = 高速切换；最近 6 条在两个域名间反复横跳
+      const last60 = recent.filter((e) => now - e.t < 60e3);
+      const last6 = recent.slice(-6);
+      const uniq6 = new Set(last6.map((e) => e.d));
+      let behaviorLine = '';
+      if (now - (window.__dyLastBehaviorQuip || 0) > 3 * 3600e3) {
+        if (last60.length >= 5) {
+          behaviorLine = pick(['主人这是在找东西，还是在进行视频考古？', '切切切——主人今天的精神状态：量子叠加。']);
+        } else if (last6.length === 6 && uniq6.size === 2) {
+          behaviorLine = '两个网站之间来回横跳……主人今天的精神状态：量子叠加。';
+        }
+        if (behaviorLine) {
+          window.__dyLastBehaviorQuip = now;
+          lastMemQuip = now; lastQuip = now;
+          V.showBubble(behaviorLine, 6000);
+          return;
+        }
+      }
+      // 域名重访感慨（原有）
+      if (now - lastMemQuip < 15 * 60e3 || Math.random() > 0.25) return;
       const counts = {};
-      for (const e of browse_log) if (e.t >= dayAgo) counts[e.d] = (counts[e.d] || 0) + 1;
+      for (const e of recent) counts[e.d] = (counts[e.d] || 0) + 1;
       const n = counts[location.hostname] || 0;
       if (n >= 3) {
         lastMemQuip = now;
@@ -578,6 +600,38 @@ document.addEventListener('pointermove', (e) => {
       }
     } catch (e) { /* storage 不可达就当没有 */ }
   }
+
+  // ---- v0.7 摸鱼指数：傍晚一次播报，吐槽是目的统计是次要 ----
+  const MOOD_TEASE = (fishMin) => [
+    `主人今天已经摸鱼 ${fishMin} 分钟了。`,
+    '本鱼建议把这定义为「技术调研」，这样就不算摸鱼。',
+    '摸鱼指数偏高。但本鱼觉得，可爱即正义。',
+  ];
+  async function maybeMoodReport() {
+    if (window.__dafeiyuRetired || !isActive() || chatOpen()) return;
+    const now = new Date();
+    if (now.getHours() < 15) return;
+    try {
+      const today = now.toISOString().slice(0, 10);
+      const { mood_today = {}, mood_date = today, mood_shown = '' } =
+        await chrome.storage.local.get(['mood_today', 'mood_date', 'mood_shown']);
+      if (mood_shown === today || mood_date !== today) return;
+      const m = mood_today;
+      const total = (m.work || 0) + (m.video || 0) + (m.novel || 0) + (m.chill || 0);
+      if (total < 20 * 60) return;
+      const mins = (x) => Math.round((m[x] || 0) / 60);
+      const bar = (x) => { const u = Math.max(1, Math.round((m[x] || 0) / total * 5)); return '█'.repeat(u) + '░'.repeat(5 - u); };
+      const fishMin = mins('video') + mins('novel') + mins('chill');
+      await chrome.storage.local.set({ mood_shown: today });
+      V.showBubble(`今日 Chrome：
+视频 ${bar('video')} ${mins('video')}分
+代码 ${bar('work')} ${mins('work')}分
+小说 ${bar('novel')} ${mins('novel')}分
+发呆 ${bar('chill')} ${mins('chill')}分
+——${pick(MOOD_TEASE(fishMin))}`, 12000);
+    } catch (e) { /* storage 不可达就算了 */ }
+  }
+  setInterval(() => { if (!window.__dafeiyuRetired) maybeMoodReport(); }, 10 * 60e3);
 
   window.DafeiyuBehavior = {
     pickQuip,

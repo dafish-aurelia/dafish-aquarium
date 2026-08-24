@@ -325,7 +325,9 @@
     '<button data-m="follow">🖱️ 跟随鼠标</button>' +
     '<button data-m="still">🧘 原地待着</button>' +
     '<button data-m="dodge">🫥 让个位（8秒）</button>' +
-    '<button data-m="home">🏠 回水缸</button>';
+    '<button data-m="home">🏠 回水缸</button>' +
+    '<button data-m="bottle-save">🫧 丢进漂流瓶</button>' +
+    '<button data-m="bottle-view">📖 漂流瓶</button>';
   modeMenu.style.display = 'none';
   document.documentElement.appendChild(modeMenu);
   V.guardEl && V.guardEl(modeMenu);
@@ -338,6 +340,16 @@
   });
   modeMenu.addEventListener('click', (e) => {
     const m = e.target?.dataset?.m;
+    if (m === 'bottle-save') {
+      modeMenu.style.display = 'none';
+      saveBottle();
+      return;
+    }
+    if (m === 'bottle-view') {
+      modeMenu.style.display = 'none';
+      openBottlePanel();
+      return;
+    }
     if (m === 'home') {
       const url = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
       if (url) { try { window.DafeiyuMailbox.send({ type: 'OPEN_HOME', url }); } catch (e) {} }
@@ -355,6 +367,63 @@
     }
     modeMenu.style.display = 'none';
   });
+  // ---- 漂流瓶（v0.7）：右键收藏当前页，水缸里捞回 ----
+  const bottlePanel = document.createElement('div');
+  bottlePanel.className = 'dafeiyu-chat';
+  bottlePanel.innerHTML =
+    '<div class="dy-head"><span>🫧 漂流瓶</span><button class="dy-close" title="收起">✕</button></div>' +
+    '<div class="dafeiyu-chat-log dy-bottle-list"></div>' +
+    '<p class="dy-hint">点一条开新标签页；✕ 放走它。本鱼也会看到你收藏了什么。</p>';
+  bottlePanel.style.display = 'none';
+  document.documentElement.appendChild(bottlePanel);
+  V.guardEl && V.guardEl(bottlePanel);
+
+  async function saveBottle() {
+    try {
+      const sUrl = window.DafeiyuSanitize.sanitizeUrl(location.href);
+      const { bottles = [] } = await chrome.storage.local.get('bottles');
+      const bottle = { t: Date.now(), title: (document.title || '无题').slice(0, 60), d: sUrl.domain, url: sUrl.url };
+      bottles.push(bottle);
+      await chrome.storage.local.set({ bottles: bottles.slice(-50) });
+      V.hop(); V.floatHearts(3);
+      V.showBubble(`🫧 装进漂流瓶啦（第 ${bottles.length} 个）`, 3500);
+      try { window.DafeiyuMailbox.outbox({ type: 'pet_event', kind: 'bottle', title: bottle.title, url: bottle.url }); } catch (e) {}
+    } catch (e) { V.showBubble('（漂流瓶没扔出去……）', 3000); }
+  }
+
+  async function openBottlePanel() {
+    window.DafeiyuChat.close(); feedPanel.style.display = 'none'; settingsPanel.style.display = 'none';
+    const list = bottlePanel.querySelector('.dy-bottle-list');
+    const { bottles = [] } = await chrome.storage.local.get('bottles');
+    list.innerHTML = '';
+    if (!bottles.length) list.innerHTML = '<div class="dy-msg">空空如也。看到好东西就右键我丢进来～</div>';
+    for (let idx = bottles.length - 1; idx >= 0; idx--) {
+      const bt = bottles[idx];
+      const row = document.createElement('div');
+      row.className = 'dy-msg';
+      row.innerHTML = '';
+      const a = document.createElement('span');
+      a.textContent = `🫧 ${bt.title}（${bt.d}）`;
+      a.style.cursor = 'pointer';
+      a.title = bt.url;
+      a.addEventListener('click', () => { try { window.DafeiyuMailbox.send({ type: 'OPEN_URL', url: bt.url }); } catch (e) {} });
+      const del = document.createElement('span');
+      del.textContent = '✕'; del.style.cssText = 'float:right;cursor:pointer;color:#7ba3c4';
+      del.title = '放走它';
+      del.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const { bottles: bs = [] } = await chrome.storage.local.get('bottles');
+        bs.splice(bs.indexOf(bt), 1);
+        await chrome.storage.local.set({ bottles: bs });
+        openBottlePanel();
+      });
+      row.appendChild(a); row.appendChild(del);
+      list.appendChild(row);
+    }
+    bottlePanel.style.display = 'flex';
+    bottlePanel.querySelector('.dy-close').addEventListener('click', () => { bottlePanel.style.display = 'none'; });
+  }
+
   document.addEventListener('click', () => { modeMenu.style.display = 'none'; });
 
   // ---- 聊天面板：所有输入默认直达缸里的本鱼（信局路由，离线自动代班）----
@@ -490,6 +559,7 @@
       panel.style.display = 'none';
       feedPanel.style.display = 'none';
       settingsPanel.style.display = 'none';
+      bottlePanel.style.display = 'none';
       modeMenu.style.display = 'none';
     }
   });

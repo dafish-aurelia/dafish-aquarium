@@ -76,9 +76,32 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create('pet-poll', { periodInMinutes: 1 });
   chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 });
 });
+// v0.7 摸鱼指数：活跃 Tab 场景分类（与 senses 同一套正则的 SW 侧副本）
+const SCENE_WORK = /(^|\.)github\.com$|(^|\.)stackoverflow\.com$|(^|\.)gitee\.com$|(^|\.)juejin\.cn$|(^|\.)csdn\.net$/;
+const SCENE_VIDEO = /(^|\.)bilibili\.com$|(^|\.)youtube\.com$|(^|\.)iqiyi\.com$|(^|\.)youku\.com$|(^|\.)netflix\.com$/;
+const SCENE_NOVEL = /(^|\.)qidian\.com$|(^|\.)jjwxc\.net$|(^|\.)69shu(?:ba)?\.(com|net)$|(^|\.)sfacg\.com$|(^|\.)ciweimao\.com$|(^|\.)zongheng\.com$/;
+function classifyHost(h) {
+  if (!h) return 'chill';
+  if (SCENE_WORK.test(h)) return 'work';
+  if (SCENE_VIDEO.test(h)) return 'video';
+  if (SCENE_NOVEL.test(h)) return 'novel';
+  return 'chill';
+}
+async function accumulateMood() {
+  try {
+    const tab = await getActiveTab();
+    const scene = classifyHost(tab && new URL(tab.url || 'http://x/').hostname);
+    const today = new Date().toISOString().slice(0, 10);
+    const { mood_today = {}, mood_date = today } = await chrome.storage.local.get(['mood_today', 'mood_date']);
+    const m = mood_date === today ? mood_today : {};
+    m[scene] = (m[scene] || 0) + 60;
+    await chrome.storage.local.set({ mood_today: m, mood_date: today });
+  } catch (e) { /* 无活跃窗口等 */ }
+}
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'pet-poll') startInboxLoop();
   if (alarm.name === 'pet-heartbeat') postHeartbeat();
+  if (alarm.name === 'pet-mood') accumulateMood();
 });
 
 let inboxLoopRunning = false;
@@ -167,6 +190,8 @@ async function postHeartbeat() {
 }
 chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
 chrome.alarms.create('pet-poll', { periodInMinutes: 1 });      // 同上：收信看门狗一并补挂
+chrome.alarms.create('pet-mood', { periodInMinutes: 1 });      // v0.7 摸鱼指数累积
+accumulateMood();
 postHeartbeat();
 
 // 信局地址钉死（审查#11：mailboxPort 全工程无写入方，属幽灵配置，删除读取分支）
@@ -240,6 +265,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
             sendResponse(await res.json());
           } catch (e) { sendResponse({ ok: false, reason: 'offline' }); }
+          break;
+        }
+        case 'OPEN_URL': {
+          // 漂流瓶等场景：代开 https 页面（内容脚本无 tabs 特权）
+          const u = String(msg.url || '');
+          if (/^https:\/\//.test(u)) chrome.tabs.create({ url: u });
+          sendResponse({ ok: true });
           break;
         }
         case 'OPEN_HOME': {
