@@ -39,6 +39,9 @@
         touched = true;
         V.setEmotion('shy', 4500); V.showBubble(TOUCH_LINES[Math.floor(Math.random() * TOUCH_LINES.length)], 4500);
         V.floatHearts(3);
+        // 0.5.11：真害羞相（捂脸泛红），状态机随后接管
+        V.setSprite('shy.png', false);
+        setTimeout(() => { if (V.W.state === 'IDLE') V.setSprite('front.png', false); }, 4500);
         try { window.DafeiyuMailbox.outbox({ type: 'pet_event', kind: 'headpat' }); } catch (e) {}
         addIntimacy(1);
         refreshIntimacy();
@@ -161,6 +164,9 @@
       V.hop();
       const line = FOODS.find((f) => f[0] === name)[3];
       V.setEmotion('happy', 4000); V.showBubble(`（${name} +好感）`, 4000);
+      // 0.5.11：真吃相——捧着啃 2.5s，散步/入睡等状态机会自己接管回去
+      V.setSprite('eat.png', false);
+      setTimeout(() => { if (V.W.state === 'IDLE') V.setSprite('front.png', false); }, 2500);
       window.DafeiyuChat.append('她', `[吃掉了${name}] ${line}`);
       // 让缸里的本鱼也知道投喂发生（30s 节流防刷屏）
       try {

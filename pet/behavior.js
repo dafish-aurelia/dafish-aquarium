@@ -126,6 +126,9 @@
     greeted = true;
     V.W.x = Math.max(60, Math.floor(innerWidth / 2) - 55);
     V.root.style.left = V.W.x + 'px';
+    // 0.5.11：招手迎接（wave 帧 4s），随后回正面
+    V.setSprite('wave.png', false);
+    setTimeout(() => { if (V.W.state === 'IDLE') V.setSprite('front.png', false); }, 4000);
     setTimeout(() => { if (isActive()) V.showBubble('主人来啦～水温刚好哦！', 5000); }, 800);
   }
   homeWelcome();
@@ -154,6 +157,7 @@
     // 主人长时间没动静 → 她打瞌睡；一有动静就醒
     if (V.W.state === 'SLEEP') {
       V.W.state = 'IDLE';
+      V.setSprite('front.png', false);
       V.showBubble('唔……本鱼醒了。', 3000);
     }
   });
@@ -165,7 +169,7 @@
     if (idleFor > 10 * 60e3 && V.W.state !== 'SLEEP') {
       stopMover(); // 审查四轮P2-4：散步/摇摆途中入睡，先掐掉步进循环别让她梦游
       V.W.state = 'SLEEP';
-      V.setSprite('front.png', false);
+      V.setSprite('sleep.png', false); // 0.5.11：真睡姿（闭眼歪头流睡泡），不再拿滤镜凑合
       V.showHeart('呼。。。呼。。。', 5000);
     } else if (V.W.state === 'SLEEP' && Math.random() < 0.5) {
       V.showHeart(pick(['呼。。。', '哈。。。呼。。。', '呼。。。呼。。。呼。。。']), 3500);

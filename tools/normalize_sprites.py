@@ -22,9 +22,8 @@ CHAR_H = 340          # 角色统一像素高（对齐最早原画的 340）
 PAD_X = 12            # 画布左右留白
 PAD_TOP = 10          # 顶部留白（呼吸空间，徽章定位在 root 不受影响）
 PAD_BOTTOM = 8        # 底部留白（脚不贴死画布边）
-FIXED = ['front.png', 'back.png', 'side.png']
-WALK_GLOB = sorted(SPRITES.glob('walk-*.png'))
-IN_USE = FIXED + [p.name for p in WALK_GLOB]
+IN_USE = sorted(p.name for p in SPRITES.glob('*.png')
+                if not p.name.startswith('icon') and '弃用' not in p.name)
 
 
 def trim(im: Image.Image) -> Image.Image:
