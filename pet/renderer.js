@@ -53,9 +53,22 @@
   }
 
 
+  // 退役守卫（0.5.11）：扩展重载后旧注入脚本的 chrome.* 全部失效，
+  // 与其每个定时器刷一屏红错，不如识别出来安静停摆（页面刷新即恢复）。
+  let ctxDead = false;
+  const ctxRetired = () => {
+    if (ctxDead) return true;
+    try { chrome.runtime.getManifest(); return false; } catch (e) {
+      ctxDead = true;
+      console.warn('[dafeiyu] 扩展已重载，本页旧脚本退役——刷新页面即可恢复');
+      return true;
+    }
+  };
+
   const DafeiyuView = {
     W, root, bubble, heart, img, S, flip: flipWrap,
     setSprite(name, flip) {
+      if (ctxRetired()) return;
       img.src = SPR(name);
       flipWrap.style.transform = flip ? 'scaleX(-1)' : '';
       // Normalize display height across all sprite frames
@@ -66,7 +79,7 @@
     // 原生朝向表：+1 图面朝右，-1 朝左，0 无方向（正/背面永不翻转）。
     // 走A/走B 原生朝右而侧面原画朝左，混用统一 flip 规则曾让她倒着走（月球漫步）。
     setSpriteDir(name, dir) {
-      const native = { 'front.png': 0, 'back.png': 0, 'side.png': -1, 'walk-a.png': 1, 'walk-b.png': 1 }[name] ?? 0;
+      const native = { 'front.png': 0, 'back.png': 0, 'side.png': -1, 'walk-a.png': 1, 'walk-b.png': 1, 'walk-c.png': 1, 'walk-d.png': 1 }[name] ?? 0;
       this.setSprite(name, native !== 0 && dir !== 0 && dir !== native);
     },
     showBubble(text, ms = 4000, emo) {
@@ -149,6 +162,7 @@
   // 微生命：随机眨眼（轻微压扁一瞬）
   (function blinkLoop() {
     setTimeout(() => {
+      if (ctxRetired()) return;
       if (!document.hidden && window.__dafeiyuVisible) {
         img.animate(
           [{ transform: 'scaleY(1)' }, { transform: 'scaleY(0.94)' }, { transform: 'scaleY(1)' }],
@@ -165,6 +179,7 @@
   const guarded = [root];
   DafeiyuView.guardEl = (el) => { if (el && !guarded.includes(el)) guarded.push(el); };
   setInterval(() => {
+    if (ctxRetired()) return;
     let repaired = false;
     for (const el of guarded) {
       if (!el.isConnected) {
