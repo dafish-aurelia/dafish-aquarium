@@ -352,6 +352,54 @@
     }
   }, 10e3);
 
+  // ---- 实时感知第 2 层：本地帧差（零 API、无模型也能"看见"画面）----
+  // 每 2s 把视频当前帧缩到 48x27 算平均亮度差：突变=剪辑/打斗/高能；
+  // 需先经历 ≥3 个平静采样（约 6 秒文戏）才反应，避免连续动作戏刷屏。
+  // 跨域画布被污染时 getImageData 会抛错 → 本层整体静默停用，不影响其他。
+  const MOTION_LINES = [
+    '哇！这段好激烈，本鱼眼睛都快跟不上啦！',
+    '（扒住缸沿）刚刚那一下看到了吗？！',
+    '高能来了高能来了！本鱼鳞片都竖起来了！',
+    '画面突然这么热闹……本鱼的小心脏咚咚跳。',
+  ];
+  const mCanvas = document.createElement('canvas');
+  mCanvas.width = 48; mCanvas.height = 27;
+  const mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+  let prevLum = null;
+  let calmStreak = 0;
+  let lastMotionReact = 0;
+  setInterval(() => {
+    if (!videoPlaying || document.hidden || chatOpen()) return;
+    const vid = document.querySelector('video');
+    if (!vid || vid.paused || vid.readyState < 2 || vid.videoWidth === 0) return;
+    try {
+      mCtx.drawImage(vid, 0, 0, mCanvas.width, mCanvas.height);
+      const d = mCtx.getImageData(0, 0, mCanvas.width, mCanvas.height).data;
+      const n = d.length / 4;
+      const lum = new Float32Array(n);
+      let sumDiff = 0;
+      for (let i = 0; i < n; i++) {
+        lum[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+        if (prevLum) sumDiff += Math.abs(lum[i] - prevLum[i]);
+      }
+      if (prevLum) {
+        const motion = sumDiff / n;
+        if (motion > 26) {
+          if (calmStreak >= 3 && Date.now() - lastMotionReact > 8 * 60e3 && Math.random() < 0.5) {
+            lastMotionReact = Date.now();
+            V.showBubble(pick(MOTION_LINES), 5200, 'happy');
+          }
+          calmStreak = 0;
+        } else if (motion < 6) {
+          calmStreak++;
+        } else {
+          calmStreak = 0;
+        }
+      }
+      prevLum = lum;
+    } catch (e) { prevLum = null; } // 画布污染（站点不给 CORS）：本层停用
+  }, 2000);
+
   // ---- 信件派发（background 独家）----
   function chatAppendIfOpen(who, text) {
     if (window.DafeiyuChat && window.DafeiyuChat.isOpen()) window.DafeiyuChat.append(who, text);
