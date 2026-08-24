@@ -125,14 +125,26 @@
   };
   window.DafeiyuView = DafeiyuView;
 
-  // 行走帧异步探测：生成帧存在才启用双帧步伐；未就绪前为空数组，
-  // 行为层据此跳过该轮散步（避免回退单帧"滑行"，也让首屏散步直接用对帧）
+  // 行走帧异步探测：候选序列里实际存在的才入列（顺序即步态顺序），
+  // 未就绪前为空数组，行为层据此跳过该轮散步。以后加新帧零代码：
+  // 生成 walk-c.png 等丢进 sprites/ 并出现在候选表即可。
   DafeiyuView.walkFrames = [];
-  ['walk-a.png', 'walk-b.png'].forEach((n) => {
-    const p = new Image();
-    p.onload = () => { if (DafeiyuView.walkFrames.indexOf(n) < 0) DafeiyuView.walkFrames.push(n); };
-    p.src = SPR(n);
-  });
+  {
+    const CANDIDATES = ['walk-a.png', 'walk-c.png', 'walk-d.png', 'walk-b.png'];
+    const loaded = [];
+    let done = false;
+    const finalize = () => {
+      if (done) return;
+      done = true;
+      DafeiyuView.walkFrames = CANDIDATES.filter((n) => loaded.indexOf(n) >= 0);
+    };
+    CANDIDATES.forEach((n) => {
+      const img = new Image();
+      img.onload = () => { loaded.push(n); };
+      img.src = SPR(n);
+    });
+    setTimeout(finalize, 2000); // 扩展自有资源毫秒级加载，2s 足够
+  }
 
   // 微生命：随机眨眼（轻微压扁一瞬）
   (function blinkLoop() {
