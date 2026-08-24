@@ -1,3 +1,21 @@
+/* ---- 字体防护（0.5.6）：宿主页的全局字体/行高样式可能污染气泡与面板，
+       在 Shadow DOM 迁移完成前，先给所有自有元素钉一套显式排版基线 ---- */
+#dafeiyu-root, #dafeiyu-root * {
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  line-height: 1.5;
+  letter-spacing: normal;
+  box-sizing: border-box;
+}
+.dafeiyu-chat, .dafeiyu-chat * {
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.dafeiyu-menu, .dafeiyu-menu * {
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
 #dafeiyu-root {
   position: fixed;
   bottom: 0;
