@@ -106,11 +106,13 @@
 
   // 心情徽章跟随场景刷新（☀️摸鱼 💼工作 🍿看剧 🏠在家）
   const SCENE_BADGE = { chill: '☀️', work: '💼', video: '🍿', novel: '📖', home: '🏠', sleepy: '💤' };
-  setInterval(() => {
+  function refreshBadge() {
     const s = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
     if (V.W.state === 'SLEEP') V.setBadge('💤');
     else V.setBadge(SCENE_BADGE[s] || '☀️');
-  }, 10e3);
+  }
+  refreshBadge(); // 立即刷一次，别让头 10 秒顶着默认 ☀️ 见人
+  setInterval(refreshBadge, 10e3);
 
   // ---- HOME：水缸主页是家 ----
   function isHome() {
@@ -219,6 +221,11 @@
     }
     if (mode === 'still') return;
     if (mode === 'follow') return; // 跟随由下方专用平滑循环接管
+    // 现场核查播放状态（缓存值有 ≤10s 空窗，别让她在正片刚开播时溜达出去）
+    try {
+      const c = window.DafeiyuSenses ? window.DafeiyuSenses.content() : null;
+      if (c && c.kind === 'video') videoPlaying = !!c.playing;
+    } catch (e) { /* senses 异常就按缓存走 */ }
     if (videoPlaying) return; // 看剧礼仪：正片播放中不散步，安安静静陪看别挡字幕
     // walk
     const frames = (V.walkFrames && V.walkFrames.length > 1) ? V.walkFrames : null;
@@ -269,8 +276,8 @@
     '去忙吧，回来按播放键就好，本鱼哪儿也不去。',
   ];
   let videoPlaying = false;
-  let pausedSince = 0;
-  let pauseComforted = false;
+  let lastPlayingAt = 0;      // 最近一次见到正片在播的时刻（暂停关怀用，抗采样空窗）
+  let pauseComfortedAt = 0;   // 上次暂停关怀的时间（每个暂停期最多关心一次）
   let lastEpComment = 0;
   let lastDanmakuReact = 0;
   // DOM 可读的弹幕关键词共情（canvas 渲染弹幕的站点读不到，自然跳过）
@@ -282,21 +289,26 @@
     [/下集|更新呢|催更/, '催更大军+1！本鱼用尾巴帮你按。'],
   ];
   let lastSig = '';
-  const seenSigs = []; // 页面内存级去重：全量导航天然重置；SPA 换内容由签名变化触发
+  const seenSigs = [];
+  // 开机立即感知一次播放状态：否则头 10 秒是空窗，她会在正片刚开始时溜达出去
+  try {
+    const c0 = window.DafeiyuSenses ? window.DafeiyuSenses.content() : null;
+    if (c0 && c0.kind === 'video' && c0.playing) videoPlaying = true;
+  } catch (e) { /* senses 未就绪就等下个周期 */ } // 页面内存级去重：全量导航天然重置；SPA 换内容由签名变化触发
   setInterval(() => {
     if (!isActive() || !window.DafeiyuSenses) return;
     let c;
     try { c = window.DafeiyuSenses.content(); } catch (e) { return; }
-    // 播放状态追踪要在 kind 早退之前做，否则离开视频页后状态永远滞留
+    // 播放状态追踪要在 kind 早退之前做，否则离开视频页后状态永远滞留。
+    // 暂停关怀用"最近播放时刻"而非状态翻转：翻转靠 10s 采样可能整段错过，
+    // 时间戳只要任何一帧采到过"在播"，90 秒静默后必触发。
     const playing = !!(c && c.kind === 'video' && c.playing);
-    if (playing !== videoPlaying) {
-      if (!playing && videoPlaying) { pausedSince = Date.now(); pauseComforted = false; }
-      else if (playing) { pausedSince = 0; }
-      videoPlaying = playing;
-    }
-    if (!videoPlaying && pausedSince && !pauseComforted &&
-        Date.now() - pausedSince > 90e3 && !chatOpen()) {
-      pauseComforted = true;
+    if (playing !== videoPlaying) videoPlaying = playing;
+    if (playing) lastPlayingAt = Date.now();
+    try { V.root.dataset.qaPause = JSON.stringify({ vp: videoPlaying, lpa: lastPlayingAt ? Math.round((Date.now() - lastPlayingAt) / 1000) : -1 }); } catch (e) {}
+    if (!playing && lastPlayingAt && !chatOpen() &&
+        Date.now() - lastPlayingAt > 90e3 && Date.now() - pauseComfortedAt > 120e3) {
+      pauseComfortedAt = Date.now();
       V.showBubble(pick(PAUSE_LINES), 6000);
     }
     // 实时感知第 1 层（零模型）：播放器状态 + DOM 弹幕关键词
@@ -466,6 +478,9 @@
       }
     }).catch(() => {});
   }
+
+  // 供渲染器自愈守卫在重挂节点后立刻恢复徽章场景色
+  window.DafeiyuView && (window.DafeiyuView.refreshBadge = refreshBadge);
 
   window.DafeiyuBehavior = {
     pickQuip,

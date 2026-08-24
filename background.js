@@ -25,7 +25,13 @@ async function syncActiveTab() {
 }
 
 chrome.windows.getLastFocused().then((w) => syncActiveTab());
-chrome.windows.onFocusChanged.addListener(() => syncActiveTab());
+// 焦点语义（0.5.7）：只在"多个 Chrome 窗口之间切换"时搬投影；
+// 焦点整体离开浏览器（WINDOW_ID_NONE，比如主人去写代码）时她留守原地——
+// 陪跑宠物不该因为主人切走就消失，否则所有定时行为（看剧礼仪/搭话）全灭。
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+  syncActiveTab();
+});
 chrome.tabs.onActivated.addListener(() => syncActiveTab());
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (tabId === prevActiveTabId && info.status === 'complete') syncActiveTab();

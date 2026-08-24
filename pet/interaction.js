@@ -145,6 +145,7 @@
     '<div class="dy-foods"></div>' +
     '<p class="dy-hint">喂食会涨好感度哦。双击本体随时打开。</p>';
   document.documentElement.appendChild(feedPanel);
+  V.guardEl && V.guardEl(feedPanel); // DOM 自愈守护（B 站等站点会重建子树）
   const foodsBox = feedPanel.querySelector('.dy-foods');
   const intimacySpan = feedPanel.querySelector('.dy-intimacy');
   function refreshIntimacy() { intimacySpan.textContent = `好感度 ${intimacy} · ${levelName()}`; }
@@ -196,6 +197,7 @@
     '<button class="dy-open-key">🔑 打开代班设置页</button>';
   settingsPanel.style.display = 'none';
   document.documentElement.appendChild(settingsPanel);
+  V.guardEl && V.guardEl(settingsPanel);
 
   async function openSettings() {
     window.DafeiyuChat.close();
@@ -310,6 +312,7 @@
     '<button data-m="dodge">🫥 让个位（8秒）</button>';
   modeMenu.style.display = 'none';
   document.documentElement.appendChild(modeMenu);
+  V.guardEl && V.guardEl(modeMenu);
   V.img.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -342,6 +345,7 @@
     '<input type="text" class="dy-input" placeholder="跟她说点什么…">' +
     '<button class="dy-send">说</button></div>';
   document.documentElement.appendChild(panel);
+  V.guardEl && V.guardEl(panel); // DOM 自愈守护
   panel.style.display = 'none'; // 显式初始隐藏：面板平时由 CSS 隐藏，内联值为空会让旧版 isOpen() 恒真
   const log = panel.querySelector('.dafeiyu-chat-log');
   const conversationContext = [];
