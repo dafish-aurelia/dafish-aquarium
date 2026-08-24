@@ -37,6 +37,22 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (tabId === prevActiveTabId && info.status === 'complete') syncActiveTab();
 });
 
+// v0.6 短期浏览记忆：域名级访问流水（仅本地 storage，24h TTL，上限 40 条）。
+// 只记 hostname，不落路径/query——陪伴台词引用"又游回某站啦"用，绝不上传。
+chrome.tabs.onUpdated.addListener(async (tabId, info) => {
+  if (info.status !== 'complete') return;
+  try {
+    const t = await chrome.tabs.get(tabId);
+    if (!t.url || !/^https?:/.test(t.url)) return;
+    const dom = new URL(t.url).hostname;
+    const { browse_log = [] } = await chrome.storage.local.get('browse_log');
+    const now = Date.now();
+    const fresh = browse_log.filter((e) => now - e.t < 24 * 3600e3);
+    fresh.push({ d: dom, t: now });
+    await chrome.storage.local.set({ browse_log: fresh.slice(-40) });
+  } catch (e) { /* tab 可能已关闭 */ }
+});
+
 // 总开关：图标点击切换 enabled；关闭时徽标提示并让所有投影退场
 chrome.action.onClicked.addListener(async () => {
   const { enabled = true } = await chrome.storage.local.get('enabled');

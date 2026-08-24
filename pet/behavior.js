@@ -150,10 +150,29 @@
   }
   chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) mode = pet_mode; });
 
-  document.addEventListener('pointermove', (e) => {
+  let lastGreetAt = 0;
+let hiddenAt = 0;
+const WELCOME_BACK_LINES = ['诶，主人回来啦。', '本鱼刚刚还在想你去哪了。', '欢迎回来～水缸水温刚好。'];
+function maybeWelcomeBack() {
+  const now = Date.now();
+  if (!isActive() || chatOpen() || now - lastGreetAt < 30 * 60e3) return;
+  lastGreetAt = now;
+  V.setSprite('wave.png', false);
+  setTimeout(() => { if (V.W.state === 'IDLE') V.setSprite('front.png', false); }, 3500);
+  V.showBubble(pick(WELCOME_BACK_LINES), 4500);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (hiddenAt && Date.now() - hiddenAt > 5 * 60e3) maybeWelcomeBack();
+  hiddenAt = 0;
+});
+document.addEventListener('pointermove', (e) => {
+    const gap = Date.now() - lastActivity;
     lastActivity = Date.now(); // 审查#2：唤醒必须重置空闲计时，否则 10 分钟后永远秒睡
     followX = e.clientX;
     followY = e.clientY;
+    // v0.6 回归问候：超过 5 分钟的动静间隔 = 主人回来了（睡醒由下方唤醒分支管，不重复）
+    if (gap > 5 * 60e3 && V.W.state !== 'SLEEP') maybeWelcomeBack();
     // 主人长时间没动静 → 她打瞌睡；一有动静就醒
     if (V.W.state === 'SLEEP') {
       V.W.state = 'IDLE';
@@ -447,6 +466,7 @@
     if (msg.type === 'PET_ACTIVE' && msg.visible) {
       tabSwitchAt = Date.now();
       homeWelcome();
+      maybeMemoryQuip();
       return;
     }
     if (msg.type !== 'PET_MESSAGE') return;
@@ -457,6 +477,13 @@
     } else if (msg.kind === 'proactive') {
       tickets.push({ text: msg.text, ts: Date.now() });
       maybeSpeak(false);
+    } else if (msg.kind === 'celebrate') {
+      // v0.6 Harness 任务庆祝：当值本鱼跑完任务经信局注入的彩信
+      lastDeep = Date.now();
+      V.spin(); V.hop();
+      V.floatHearts(6);
+      V.showBubble(msg.text || '主人！成功啦！', 6000, 'happy');
+      chatAppendIfOpen('缸里的本鱼', msg.text || '任务完成，庆祝！');
     } else if (msg.kind === 'standin_reply') {
       lastDeep = Date.now();
       V.showBubble(msg.text, 6000);
@@ -507,6 +534,50 @@
 
   // 供渲染器自愈守卫在重挂节点后立刻恢复徽章场景色
   window.DafeiyuView && (window.DafeiyuView.refreshBadge = refreshBadge);
+
+  // ---- v0.6 自主小动作：主人没搭理她时，她自己找点事做（低频/短时/不打扰）----
+  const SOLO_LINES = ['本鱼正在研究为什么网页底部这么宽。', '主人不理本鱼，本鱼决定自己玩。', '（趴在缸底假装珊瑚）'];
+  let lastSoloAt = 0;
+  setInterval(() => {
+    if (window.__dafeiyuRetired || !isActive() || V.W.state !== 'IDLE' || chatOpen() || videoPlaying) return;
+    const now = Date.now();
+    if (now - lastSoloAt < 45e3 || Math.random() > 0.3) return;
+    lastSoloAt = now;
+    const act = ['tail', 'peek', 'lie', 'talk'][Math.floor(Math.random() * 4)];
+    if (act === 'tail') {
+      V.spin();
+      if (Math.random() < 0.5) V.showHeart('（追自己的尾巴）……抓到了！……再放掉。', 4200);
+    } else if (act === 'peek') {
+      V.setSpriteDir('side.png', (followX ?? V.W.x) > V.W.x ? 1 : -1); // 凑近偷看鼠标
+      setTimeout(() => { if (V.W.state === 'IDLE') V.setSprite('front.png', false); }, 2500);
+    } else if (act === 'lie') {
+      V.setSprite('sleep.png', false);
+      V.showBubble(pick(['主人不理本鱼，本鱼决定自己玩。', '（趴在缸底假装珊瑚）']), 4200);
+      setTimeout(() => { if (V.W.state === 'IDLE') V.setSprite('front.png', false); }, 5000);
+    } else {
+      V.showHeart('（' + pick(SOLO_LINES) + '）', 4500);
+    }
+  }, 60e3);
+
+  // ---- v0.6 短期浏览记忆：background 记域名流水，切 Tab 回来低概率感慨 ----
+  let lastMemQuip = 0;
+  async function maybeMemoryQuip() {
+    const now = Date.now();
+    if (window.__dafeiyuRetired || !isActive() || chatOpen() || now - lastMemQuip < 15 * 60e3 || Math.random() > 0.25) return;
+    try {
+      const { browse_log = [] } = await chrome.storage.local.get('browse_log');
+      const dayAgo = now - 24 * 3600e3;
+      const counts = {};
+      for (const e of browse_log) if (e.t >= dayAgo) counts[e.d] = (counts[e.d] || 0) + 1;
+      const n = counts[location.hostname] || 0;
+      if (n >= 3) {
+        lastMemQuip = now;
+        lastQuip = now; // 占用台词冷却，不与搭话叠加
+        V.showBubble(n >= 6 ? `今天第 ${n} 次回到 ${location.hostname} 了呢，主人。`
+                            : `又游回 ${location.hostname} 啦？本鱼还以为你今天要彻底摸鱼了。`, 5500);
+      }
+    } catch (e) { /* storage 不可达就当没有 */ }
+  }
 
   window.DafeiyuBehavior = {
     pickQuip,
