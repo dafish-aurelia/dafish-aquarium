@@ -177,6 +177,13 @@
   }, 30e3);
 
   // follow 专用平滑循环：独立于散步调度器，随时响应鼠标（80ms 一帧）
+  const CATCH_LINES = [
+    '抓到啦！主人的鼠标归本鱼了！',
+    '唔嘿嘿，追了半天终于抓到了～',
+    '抓——到！本鱼的追击成功率百分之百！',
+    '鼠标：（救命）',
+  ];
+  let lastCatchAt = 0;
   setInterval(() => {
     if (mode !== 'follow') {
       if (V.W.state === 'FOLLOW') V.W.state = 'IDLE'; // 自愈：模式切走后复位残留
@@ -190,7 +197,22 @@
     const dx = tx - V.W.x;
     const dby = tby - curBy;
     if (Math.abs(dx) <= 14 && Math.abs(dby) <= 14) {
-      if (V.W.state === 'FOLLOW') { V.W.state = 'IDLE'; V.setSprite('front.png', false); }
+      if (V.W.state === 'FOLLOW') {
+        V.W.state = 'IDLE';
+        V.setSprite('front.png', false);
+        // 抓到光标的庆祝（0.5.15）：追上那一刻蹦跳+欢呼+飘心，20s 冷却防刷屏
+        const now = Date.now();
+        if (!window.__dafeiyuRetired && now - lastCatchAt > 20e3 && !chatOpen()) {
+          lastCatchAt = now;
+          V.hop();
+          V.img.animate(
+            [{ transform: 'scale(1)' }, { transform: 'scale(1.09)' }, { transform: 'scale(1)' }],
+            { duration: 260, easing: 'ease-out' });
+          V.setEmotion('happy', 3000);
+          V.floatHearts(3);
+          V.showBubble(pick(CATCH_LINES), 3500);
+        }
+      }
       return;
     }
     V.W.state = 'FOLLOW';
