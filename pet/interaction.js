@@ -98,7 +98,7 @@
     if (moved || touched) { touched = false; return; }
     clearTimeout(clickTimer);
     clickTimer = setTimeout(() => {
-      V.setSprite('正面.png', false);
+      V.setSprite('front.png', false);
       V.hop();
       V.showBubble(B.pickQuip(), 3500);
     }, 260);

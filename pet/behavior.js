@@ -140,7 +140,7 @@
     mode = m;
     stopMover(); // 审查四轮P2-4：切模式立刻掐断散步/摇摆步进，不再走完残留全程
     V.W.state = 'IDLE'; // 切模式时复位残留状态，防止卡死在旧状态（P0 教训）
-    V.setSprite('正面.png', false);
+    V.setSprite('front.png', false);
     chrome.storage.local.set({ pet_mode: m });
   }
   chrome.storage.local.get('pet_mode').then(({ pet_mode }) => { if (pet_mode) mode = pet_mode; });
@@ -163,7 +163,7 @@
     if (idleFor > 10 * 60e3 && V.W.state !== 'SLEEP') {
       stopMover(); // 审查四轮P2-4：散步/摇摆途中入睡，先掐掉步进循环别让她梦游
       V.W.state = 'SLEEP';
-      V.setSprite('正面.png', false);
+      V.setSprite('front.png', false);
       V.showHeart('呼。。。呼。。。', 5000);
     } else if (V.W.state === 'SLEEP' && Math.random() < 0.5) {
       V.showHeart(pick(['呼。。。', '哈。。。呼。。。', '呼。。。呼。。。呼。。。']), 3500);
@@ -184,17 +184,17 @@
     const dx = tx - V.W.x;
     const dby = tby - curBy;
     if (Math.abs(dx) <= 14 && Math.abs(dby) <= 14) {
-      if (V.W.state === 'FOLLOW') { V.W.state = 'IDLE'; V.setSprite('正面.png', false); }
+      if (V.W.state === 'FOLLOW') { V.W.state = 'IDLE'; V.setSprite('front.png', false); }
       return;
     }
     V.W.state = 'FOLLOW';
     if (Math.abs(dx) >= Math.abs(dby)) {
       V.W.dir = dx > 0 ? 1 : -1;
-      V.setSpriteDir('侧面.png', V.W.dir);
+      V.setSpriteDir('side.png', V.W.dir);
       V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 3));
     } else {
       const up = dby > 0; // bottom 增大 = 往上游
-      V.setSprite(up ? '背面.png' : '正面.png', false);
+      V.setSprite(up ? 'back.png' : 'front.png', false);
       V.root.style.bottom = Math.max(0, Math.min(innerHeight - 170, curBy + Math.sign(dby) * 3)) + 'px';
     }
     V.root.style.left = V.W.x + 'px';
@@ -250,7 +250,7 @@
         clearInterval(t); if (V.W._mover === t) V.W._mover = null;
         V.img.classList.remove('dy-walk-bob');
         delete V.root.dataset.qaState; // 快照随散步结束清掉，别留陈值误导采样
-        V.W.state = 'IDLE'; V.setSprite('正面.png', false);
+        V.W.state = 'IDLE'; V.setSprite('front.png', false);
       }
     }, 40);
     V.W._mover = t;

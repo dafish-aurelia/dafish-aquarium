@@ -10,7 +10,7 @@
   3) 底部中心对齐贴到统一画布（同一画布 => 渲染宽度恒定）；
   4) PNG optimize 重压缩（AI 大图 1.2MB -> 约百 KB）。
 
-主人换装工作流不变：生成新帧覆盖 sprites/侧面走A|B.png 后，
+主人换装工作流不变：生成新帧覆盖 sprites/walk-a|walk-b.png 后，
   python tools/normalize_sprites.py
 再重载扩展即可。只处理 IN_USE 里列出的在用帧。
 """
@@ -22,7 +22,7 @@ CHAR_H = 340          # 角色统一像素高（对齐最早原画的 340）
 PAD_X = 12            # 画布左右留白
 PAD_TOP = 10          # 顶部留白（呼吸空间，徽章定位在 root 不受影响）
 PAD_BOTTOM = 8        # 底部留白（脚不贴死画布边）
-IN_USE = ['正面.png', '背面.png', '侧面.png', '侧面走A.png', '侧面走B.png']
+IN_USE = ['front.png', 'back.png', 'side.png', 'walk-a.png', 'walk-b.png']
 
 
 def trim(im: Image.Image) -> Image.Image:
@@ -59,3 +59,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+（0.5.3 起精灵图统一 ASCII 文件名：front/back/side/walk-a/walk-b，
+ 根治中文文件名在 web_accessible_resources 的百分号编码隐患。）

@@ -31,7 +31,7 @@
   heart.style.display = 'none';
   const img = document.createElement('img');
   img.className = 'dafeiyu-sprite';
-  img.src = SPR('正面.png');
+  img.src = SPR('front.png');
   // 审查四轮P2-3：水平翻面放独立包装层——img 自身留给动画/CSS 情绪 transform，
   // 否则 WAAPI 的 composite:replace 会吞掉内联镜像（朝左瞬间变朝右）、
   // 类选择器也压不过内联样式导致情绪倾斜在朝左时失效。
@@ -66,7 +66,7 @@
     // 原生朝向表：+1 图面朝右，-1 朝左，0 无方向（正/背面永不翻转）。
     // 走A/走B 原生朝右而侧面原画朝左，混用统一 flip 规则曾让她倒着走（月球漫步）。
     setSpriteDir(name, dir) {
-      const native = { '正面.png': 0, '背面.png': 0, '侧面.png': -1, '侧面走A.png': 1, '侧面走B.png': 1 }[name] ?? 0;
+      const native = { 'front.png': 0, 'back.png': 0, 'side.png': -1, 'walk-a.png': 1, 'walk-b.png': 1 }[name] ?? 0;
       this.setSprite(name, native !== 0 && dir !== 0 && dir !== native);
     },
     showBubble(text, ms = 4000, emo) {
@@ -128,7 +128,7 @@
   // 行走帧异步探测：生成帧存在才启用双帧步伐；未就绪前为空数组，
   // 行为层据此跳过该轮散步（避免回退单帧"滑行"，也让首屏散步直接用对帧）
   DafeiyuView.walkFrames = [];
-  ['侧面走A.png', '侧面走B.png'].forEach((n) => {
+  ['walk-a.png', 'walk-b.png'].forEach((n) => {
     const p = new Image();
     p.onload = () => { if (DafeiyuView.walkFrames.indexOf(n) < 0) DafeiyuView.walkFrames.push(n); };
     p.src = SPR(n);

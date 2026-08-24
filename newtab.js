@@ -1,23 +1,58 @@
 // 新标签页跳板（MV3 禁内联脚本，逻辑必须住外部文件）：
-// 审查二轮#5 —— 只走 chrome.tabs.update 特权通道这一条路（成功率更高、
-// 语义更干净），砍掉 location.replace 第一跳以消除同 URL 双重导航的竞争。
-// 失败 = 未开「允许访问文件网址」→ 显示授权指引，不把主人晾在半路。
+// 只走 chrome.tabs.update 特权通道这一条路；目标 = storage.home_url 覆盖值，
+// 没有才回落出厂默认（可移植性：搬家后在兜底页里重设即可，不用改代码）。
+// 失败 = 未开「允许访问文件网址」或文件不存在 → 显示指引 + 重设入口。
 (async function bootTankRedirect() {
-  const TANK = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
-  if (!TANK) return;
+  let tank = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
+  try {
+    const { home_url } = await chrome.storage.local.get('home_url');
+    if (home_url) { tank = home_url; window.DafeiyuSanitize.setHomeUrl(home_url); }
+  } catch (e) { /* storage 不可达：用默认 */ }
+  if (!tank) return;
   try {
     const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
     if (!tab || tab.id == null) return;
-    await chrome.tabs.update(tab.id, { url: TANK });
-    return; // 成功跳走，本页使命结束
+    // 先探测再跳：file 不存在时 tabs.update 会落到 Chrome 报错页，不如留在兜底页
+    if (await urlReachable(tank)) {
+      await chrome.tabs.update(tab.id, { url: tank });
+      return; // 成功跳走，本页使命结束
+    }
   } catch (e) {}
+  showFallback(tank);
+})();
+
+async function urlReachable(url) {
+  if (!url.startsWith('file:')) return true; // 非 file 目标交给浏览器自己处理
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    return r.ok;
+  } catch (e) { return false; }
+}
+
+function showFallback(tank) {
   const hint = document.getElementById('file-hint');
   if (!hint) return;
   hint.style.display = 'block';
   document.getElementById('go-ext').addEventListener('click', () => {
     chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
   });
-})();
+  const form = document.getElementById('home-reset');
+  if (!form) return;
+  const input = form.querySelector('input');
+  input.value = tank;
+  form.querySelector('button').addEventListener('click', async () => {
+    const v = input.value.trim();
+    if (!v) return;
+    await chrome.storage.local.set({ home_url: v });
+    window.DafeiyuSanitize.setHomeUrl(v);
+    const st = document.getElementById('home-reset-state');
+    if (await urlReachable(v)) {
+      const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
+      if (tab && tab.id != null) { await chrome.tabs.update(tab.id, { url: v }); return; }
+    }
+    if (st) st.textContent = '已保存，但这个地址现在还打不开——检查路径或先开「允许访问文件网址」。';
+  });
+}
 
 const GREETING_POOLS = {
   night: [

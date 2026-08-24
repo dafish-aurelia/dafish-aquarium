@@ -19,10 +19,17 @@
       <button type="submit">出发</button>
     </form>
   </main>
-  <div id="file-hint" style="display:none;position:fixed;left:50%;bottom:18%;transform:translateX(-50%);background:rgba(8,30,48,.85);color:#bfe3ff;padding:14px 20px;border-radius:12px;font:14px/1.7 system-ui,'Microsoft YaHei',sans-serif;text-align:center;z-index:10;max-width:520px;">
+  <div id="file-hint" style="display:none;position:fixed;left:50%;bottom:12%;transform:translateX(-50%);background:rgba(8,30,48,.85);color:#bfe3ff;padding:14px 20px;border-radius:12px;font:14px/1.7 system-ui,'Microsoft YaHei',sans-serif;text-align:center;z-index:10;max-width:560px;">
     跳转水缸被 Chrome 拦下啦：请在扩展设置里给「鲸鱼娘·大肥鱼」打开
     <b>「允许访问文件网址」</b>开关，之后新标签页就能直接回水缸～
     <button id="go-ext" style="margin-left:10px;cursor:pointer;border:0;border-radius:8px;padding:6px 12px;background:#39c5ff;color:#04222f;font-weight:600;">打开扩展设置</button>
+    <div id="home-reset" style="margin-top:10px;border-top:1px solid rgba(191,227,255,.25);padding-top:8px;">
+      水缸搬家了？把新地址告诉她：<br>
+      <input type="text" placeholder="file:///D:/…/browser/start.html"
+        style="width:92%;margin-top:6px;border:0;border-radius:8px;padding:7px 10px;background:rgba(255,255,255,.92);color:#04222f;font-size:13px;">
+      <button style="margin-top:6px;cursor:pointer;border:0;border-radius:8px;padding:6px 14px;background:#39c5ff;color:#04222f;font-weight:600;">保存并前往</button>
+    </div>
+    <div id="home-reset-state" style="margin-top:6px;font-size:12px;color:#ffd9a0;"></div>
   </div>
   <script src="newtab.js"></script>
 </body>
