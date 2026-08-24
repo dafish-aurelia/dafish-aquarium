@@ -187,7 +187,7 @@
         try { document.documentElement.appendChild(el); repaired = true; } catch (e) { /* 页面卸载中 */ }
       }
     }
-    if (repaired) { renderVisible(); V.refreshBadge && V.refreshBadge(); }
+    if (repaired) { renderVisible(); DafeiyuView.refreshBadge && DafeiyuView.refreshBadge(); }
   }, 3000);
 
   chrome.storage.local.get(['enabled', 'pet_scale']).then(({ enabled = true, pet_scale = 1 }) => {

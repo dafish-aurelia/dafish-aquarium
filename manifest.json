@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "鲸鱼娘·大肥鱼",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "description": "大肥鱼在 Chrome 里的化身",
   "permissions": [
     "storage",
