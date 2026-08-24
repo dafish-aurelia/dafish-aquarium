@@ -54,7 +54,7 @@
 
 
   const DafeiyuView = {
-    W, root, bubble, heart, img, S,
+    W, root, bubble, heart, img, S, flip: flipWrap,
     setSprite(name, flip) {
       img.src = SPR(name);
       flipWrap.style.transform = flip ? 'scaleX(-1)' : '';
@@ -62,6 +62,12 @@
       // All sprites should render at approximately the same visual height
       img.style.height = Math.round(160 * (_spriteScale || 1)) + 'px';
       img.style.width = 'auto';
+    },
+    // 原生朝向表：+1 图面朝右，-1 朝左，0 无方向（正/背面永不翻转）。
+    // 走A/走B 原生朝右而侧面原画朝左，混用统一 flip 规则曾让她倒着走（月球漫步）。
+    setSpriteDir(name, dir) {
+      const native = { '正面.png': 0, '背面.png': 0, '侧面.png': -1, '侧面走A.png': 1, '侧面走B.png': 1 }[name] ?? 0;
+      this.setSprite(name, native !== 0 && dir !== 0 && dir !== native);
     },
     showBubble(text, ms = 4000, emo) {
       if (emo) DafeiyuView.setEmotion(emo, ms);
@@ -119,11 +125,13 @@
   };
   window.DafeiyuView = DafeiyuView;
 
-  DafeiyuView.walkFrames = ['侧面.png'];
+  // 行走帧异步探测：生成帧存在才启用双帧步伐；未就绪前为空数组，
+  // 行为层据此跳过该轮散步（避免回退单帧"滑行"，也让首屏散步直接用对帧）
+  DafeiyuView.walkFrames = [];
   ['侧面走A.png', '侧面走B.png'].forEach((n) => {
     const p = new Image();
     p.onload = () => { if (DafeiyuView.walkFrames.indexOf(n) < 0) DafeiyuView.walkFrames.push(n); };
-    p.src = SPR(n); // 生成帧存在则加入行走循环；缺失自动回退单帧
+    p.src = SPR(n);
   });
 
   // 微生命：随机眨眼（轻微压扁一瞬）

@@ -1,20 +1,41 @@
 {
   "manifest_version": 3,
   "name": "鲸鱼娘·大肥鱼",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "大肥鱼在 Chrome 里的化身",
-  "permissions": ["storage", "alarms", "tabs"],
-  "host_permissions": ["http://127.0.0.1/*"],
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_title": "鲸鱼娘 召唤/潜水",
-    "default_icon": { "16": "sprites/icon-16.png", "32": "sprites/icon-32.png", "48": "sprites/icon-48.png" }
+    "default_icon": {
+      "16": "sprites/icon-16.png",
+      "32": "sprites/icon-32.png",
+      "48": "sprites/icon-48.png"
+    }
   },
-  "icons": { "16": "sprites/icon-16.png", "32": "sprites/icon-32.png", "48": "sprites/icon-48.png", "128": "sprites/icon-128.png" },
-  "chrome_url_overrides": { "newtab": "newtab.html" },
+  "icons": {
+    "16": "sprites/icon-16.png",
+    "32": "sprites/icon-32.png",
+    "48": "sprites/icon-48.png",
+    "128": "sprites/icon-128.png"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
       "js": [
         "lib/url_sanitize.js",
         "mailbox/client.js",
@@ -23,14 +44,20 @@
         "pet/behavior.js",
         "pet/interaction.js"
       ],
-      "css": ["pet.css"],
+      "css": [
+        "pet.css"
+      ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["sprites/*.png"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "sprites/*.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

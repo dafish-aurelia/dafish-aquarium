@@ -190,7 +190,7 @@
     V.W.state = 'FOLLOW';
     if (Math.abs(dx) >= Math.abs(dby)) {
       V.W.dir = dx > 0 ? 1 : -1;
-      V.setSprite('侧面.png', V.W.dir > 0);
+      V.setSpriteDir('侧面.png', V.W.dir);
       V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 3));
     } else {
       const up = dby > 0; // bottom 增大 = 往上游
@@ -220,10 +220,11 @@
     if (mode === 'still') return;
     if (mode === 'follow') return; // 跟随由下方专用平滑循环接管
     // walk
+    const frames = (V.walkFrames && V.walkFrames.length > 1) ? V.walkFrames : null;
+    if (!frames) return; // 行走帧未就绪：本轮跳过，等下个调度周期（不再单帧滑行）
     V.W.state = 'WALK';
     V.W.dir = Math.random() < 0.5 ? -1 : 1;
-    const frames = (V.walkFrames && V.walkFrames.length > 1) ? V.walkFrames : ['侧面.png'];
-    V.setSprite(frames[0], V.W.dir > 0);
+    V.setSpriteDir(frames[0], V.W.dir); // 朝向=移动方向（帧原生朝向由渲染器换算翻转）
     V.img.classList.add('dy-walk-bob'); // 行走上下起伏，告别平移滑行感
     const steps = 60 + Math.floor(Math.random() * 80);
     let i = 0;
@@ -235,10 +236,20 @@
       V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * ease));
       V.root.style.left = V.W.x + 'px';
       // 行走帧循环：每 5 tick（200ms）换一帧，尾巴摆起来
-      if (frames.length > 1 && ++f % 5 === 0) V.setSprite(frames[(f / 5) % frames.length | 0], V.W.dir > 0);
+      if (frames.length > 1 && ++f % 5 === 0) V.setSpriteDir(frames[(f / 5) % frames.length | 0], V.W.dir);
+      // 观测快照：写进 DOM data 属性（隔离世界与主世界共享 DOM，QA 驱动端由此采样）
+      try {
+        V.root.dataset.qaState = JSON.stringify({
+          st: 'WALK', x: Math.round(V.W.x), dir: V.W.dir,
+          fr: decodeURIComponent((V.img.src || '').split('/').pop() || ''),
+          fl: (V.flip && V.flip.style.transform) === 'scaleX(-1)',
+          w: Math.round(V.img.getBoundingClientRect().width),
+        });
+      } catch (e) { /* 采不上就算了，不影响行走 */ }
       if (++i > steps) {
         clearInterval(t); if (V.W._mover === t) V.W._mover = null;
         V.img.classList.remove('dy-walk-bob');
+        delete V.root.dataset.qaState; // 快照随散步结束清掉，别留陈值误导采样
         V.W.state = 'IDLE'; V.setSprite('正面.png', false);
       }
     }, 40);
