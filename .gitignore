@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 data/
+.pytest_cache/
+*弃用*

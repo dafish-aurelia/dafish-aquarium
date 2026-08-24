@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   // 鲸鱼娘信局客户端：所有网络都经 background（chrome.runtime），本文件零 fetch。
   // 注：不提供 inbox() 直排空通道 —— 信件由 background 独家消费后广播（审查四轮）。
   window.DafeiyuMailbox = {
@@ -7,5 +7,8 @@
     deepChat: (payload) => chrome.runtime.sendMessage({ type: 'MAILBOX_DEEP_CHAT', payload }),
     openStandinSettings: () => chrome.runtime.sendMessage({ type: 'OPEN_STANDIN_SETTINGS' }),
     outbox: (payload) => chrome.runtime.sendMessage({ type: 'MAILBOX_OUTBOX', payload }),
+    harnessModels: () => chrome.runtime.sendMessage({ type: 'HARNESS_MODELS' }),
+    harnessSelectModel: (sel) => chrome.runtime.sendMessage({ type: 'HARNESS_SELECT_MODEL', payload: sel }),
+    standinTestModels: (payload) => chrome.runtime.sendMessage({ type: 'STANDIN_TEST_MODELS', payload }),
   };
 })();

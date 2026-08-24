@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -50,6 +50,13 @@
     }
     #state { display: block; margin-top: 10px; font-size: 12px; color: #56789a; min-height: 18px; text-align: center; }
     .ok { color: #178a50; }
+    select {
+      appearance: auto;
+      background: #fff;
+      color: #0a3555;
+    }
+    .testing { color: #d97706 !important; }
+    .error { color: #dc2626 !important; }
   </style>
 </head>
 <body>
@@ -62,6 +69,13 @@
     <div class="row"><label for="k">API Key</label><input id="k" type="password" autocomplete="off" placeholder="留空 = 不修改已保存的钥匙"></div>
     <div class="row"><label for="u">Base URL</label><input id="u" type="text" placeholder="https://api.siliconflow.cn/v1"></div>
     <div class="row"><label for="m">Model</label><input id="m" type="text" placeholder="deepseek-ai/DeepSeek-V3"></div>
+    <button id="test-models" style="margin-top:8px;background:linear-gradient(135deg,#f59e0b,#d97706);font-size:13px">🔍 测试连通 & 列出模型</button>
+    <div class="row" id="model-select-row" style="display:none;margin-top:8px">
+      <label for="model-select">从列表选择模型</label>
+      <select id="model-select" style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid rgba(90,160,220,0.5);font-size:13px">
+        <option value="">-- 选择 --</option>
+      </select>
+    </div>
     <button id="save">💾 保存</button>
     <span id="state"></span>
   </main>

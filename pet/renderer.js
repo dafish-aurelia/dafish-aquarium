@@ -1,6 +1,12 @@
-(() => {
-  if (window.__dafeiyu) return;
+﻿(() => {
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === 'DEV_REFRESH_PAGE') {
+      location.reload();
+    }
+  });  if (window.__dafeiyu) return;
   window.__dafeiyu = true;
+  let _spriteScale = 1;
   const SPR = (n) => chrome.runtime.getURL('sprites/' + n);
 
   const root = document.createElement('div');
@@ -46,11 +52,16 @@
     window.__dafeiyuVisible = v;
   }
 
+
   const DafeiyuView = {
     W, root, bubble, heart, img, S,
     setSprite(name, flip) {
       img.src = SPR(name);
       flipWrap.style.transform = flip ? 'scaleX(-1)' : '';
+      // Normalize display height across all sprite frames
+      // All sprites should render at approximately the same visual height
+      img.style.height = Math.round(160 * (_spriteScale || 1)) + 'px';
+      img.style.width = 'auto';
     },
     showBubble(text, ms = 4000, emo) {
       if (emo) DafeiyuView.setEmotion(emo, ms);
@@ -67,7 +78,9 @@
       heart._t = setTimeout(() => { heart.style.display = 'none'; }, ms);
     },
     setScale(s = 1) {
-      img.style.width = Math.round(110 * s) + 'px';
+      _spriteScale = s;
+      img.style.height = Math.round(160 * s) + 'px';
+      img.style.width = 'auto';
     },
     hop() {
       img.animate(

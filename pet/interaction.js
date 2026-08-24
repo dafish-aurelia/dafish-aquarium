@@ -1,7 +1,15 @@
-(() => {
+﻿(() => {
   const V = window.DafeiyuView;
   const B = window.DafeiyuBehavior;
   if (!V || !B) return;
+
+  // Extension context invalidation guard (after reload, old scripts die)
+  let ctxValid = true;
+  try { chrome.runtime.getManifest(); } catch (e) { ctxValid = false; }
+  if (!ctxValid) {
+    console.warn('[dafeiyu] Extension reloaded — please refresh this page.');
+    return;
+  }
 
   // ---- 拖拽（Pointer Events）+ 转圈晕眩检测 ----
   let dragging = false, moved = false, downX = 0, downY = 0;
@@ -175,6 +183,12 @@
       '<select class="dy-size"><option value="0.8">小</option><option value="1">标准</option><option value="1.3">大</option></select></label>' +
     '<label class="dy-row">上下文保留：<input type="number" class="dy-ctxkeep" min="4" max="40" step="2" style="width:64px"> 条</label>' +
     '<div class="dy-sep"></div>' +
+    '<div class="dy-sub">🧠 本体模型（Harness 会话）</div>' +
+    '<label class="dy-row">模型：<select class="dy-model"><option value="">加载中…</option></select></label>' +
+    '<button class="dy-refresh-model" style="font-size:11px;padding:4px 8px;margin-top:2px">🔄 刷新列表</button> ' +
+    '<button class="dy-apply-model" style="font-size:11px;padding:4px 8px;margin-top:2px">✅ 应用到班次</button>' +
+    '<span class="dy-model-state" style="font-size:11px;color:#56789a;margin-left:6px"></span>' +
+    '<div class="dy-sep"></div>' +
     '<div class="dy-sub">🐠 代班小鱼（本鱼离线时顶班）</div>' +
     // 审查五轮（对抗测试）：钥匙表单不得住在宿主页可读的 DOM 里，
     // 改为跳转扩展自有安全页 settings.html（chrome-extension:// 独立源）。
@@ -186,11 +200,14 @@
   async function openSettings() {
     window.DafeiyuChat.close();
     feedPanel.style.display = 'none';
-    const { pet_scale: s = 1 } = await chrome.storage.local.get('pet_scale');
-    settingsPanel.querySelector('.dy-size').value = String(Number(s) || 1);
-    const { ctx_keep: k = 12 } = await chrome.storage.local.get('ctx_keep');
-    settingsPanel.querySelector('.dy-ctxkeep').value = Number(k) || 12;
+    try {
+      const { pet_scale: s = 1 } = await chrome.storage.local.get('pet_scale');
+      settingsPanel.querySelector('.dy-size').value = String(Number(s) || 1);
+      const { ctx_keep: k = 12 } = await chrome.storage.local.get('ctx_keep');
+      settingsPanel.querySelector('.dy-ctxkeep').value = Number(k) || 12;
+    } catch (e) { /* storage unavailable; use defaults */ }
     settingsPanel.style.display = 'flex';
+    loadModels();
   }
 
   V.root.querySelector('.dafeiyu-toolbar').addEventListener('click', async (e) => {
@@ -225,6 +242,63 @@
   settingsPanel.querySelector('.dy-open-key').addEventListener('click', () => {
     window.DafeiyuMailbox.openStandinSettings();
   });
+
+  // ---- 模型选择：查 Harness 可用模型 + 切换班次模型 ----
+  const modelSel = settingsPanel.querySelector('.dy-model');
+  const modelState = settingsPanel.querySelector('.dy-model-state');
+
+  async function loadModels() {
+    modelState.textContent = '';
+    modelSel.innerHTML = '<option value="">加载中…</option>';
+    try {
+      const res = await window.DafeiyuMailbox.harnessModels();
+      if (!res || !res.ok) throw new Error(res?.error || '获取失败');
+      modelSel.innerHTML = '';
+      for (const g of res.groups) {
+        const og = document.createElement('optgroup');
+        og.label = g.name;
+        for (const m of g.models) {
+          const opt = document.createElement('option');
+          opt.value = JSON.stringify({ provider: g.id, model: m.id });
+          opt.textContent = `${m.name}（${g.name}）`;
+          og.appendChild(opt);
+        }
+        modelSel.appendChild(og);
+      }
+      // Mark current
+      if (res.current) {
+        const cur = JSON.stringify(res.current);
+        for (const opt of modelSel.options) {
+          if (opt.value === cur) { opt.selected = true; break; }
+        }
+        modelState.textContent = '当前: ' + res.current.model;
+      }
+    } catch (e) {
+      modelSel.innerHTML = '<option value="">不可用</option>';
+      modelState.textContent = '⚠ ' + e.message;
+    }
+  }
+
+  settingsPanel.querySelector('.dy-refresh-model').addEventListener('click', loadModels);
+
+  settingsPanel.querySelector('.dy-apply-model').addEventListener('click', async () => {
+    if (!modelSel.value) { modelState.textContent = '⚠ 请先选模型'; return; }
+    const sel = JSON.parse(modelSel.value);
+    modelState.textContent = '切换中…';
+    try {
+      const res = await window.DafeiyuMailbox.harnessSelectModel(sel);
+      if (res && res.ok) {
+        modelState.textContent = '✓ 已切到 ' + sel.model;
+        V.showBubble('唔…换了新脑子…感觉更聪明了？', 3500);
+      } else {
+        modelState.textContent = '⚠ 切换失败';
+      }
+    } catch (e) {
+      modelState.textContent = '⚠ ' + e.message;
+    }
+  });
+
+
 
   // ---- 右键模式菜单（散步/跟随/待着）----
   const modeMenu = document.createElement('div');
@@ -335,6 +409,18 @@
       } else if (res && res.mode === 'standin') {
         B.markDeep();
         window.DafeiyuChat.append('代班小鱼', res.text);
+        V.showBubble(res.text, 6000);
+      } else if (res && res.mode === 'pending_fish') {
+        // 本鱼离线且无处代班：信排队等本体，门铃会去叫她回来亲笔回
+        B.markDeep();
+        const note = (res.text || '信已投出，等本鱼回信～');
+        window.DafeiyuChat.append('她', note);
+        V.showBubble(note, 6000);
+      } else if (res && res.mode === 'offline_no_key') {
+        window.DafeiyuChat.append('她', res.text);
+        V.showBubble(res.text, 8000);
+      } else if (res && res.mode === 'standin_error') {
+        window.DafeiyuChat.append('她', res.text);
         V.showBubble(res.text, 6000);
       } else {
         // 审查二轮#4：区分断链/锁门/在途，别让 SW 打盹背"出游"的锅

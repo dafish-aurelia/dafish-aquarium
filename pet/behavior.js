@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   const V = window.DafeiyuView;
   if (!V) return;
 
@@ -229,7 +229,10 @@
     let i = 0;
     let f = 0;
     const t = setInterval(() => {
-      V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * 1.5));
+      // Ease-in-out: slower at start and end, faster in middle
+      const progress = i / steps;
+      const ease = progress < 0.3 ? 0.8 + progress * 2 : progress > 0.7 ? 2.2 - progress * 2 : 1.4;
+      V.W.x = Math.max(60, Math.min(innerWidth - 60, V.W.x + V.W.dir * ease));
       V.root.style.left = V.W.x + 'px';
       // 行走帧循环：每 5 tick（200ms）换一帧，尾巴摆起来
       if (frames.length > 1 && ++f % 5 === 0) V.setSprite(frames[(f / 5) % frames.length | 0], V.W.dir > 0);

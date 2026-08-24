@@ -172,6 +172,8 @@ def test_projection_heartbeat_never_routes_to_fish(base, tmp_path, monkeypatch):
     (tmp_path / 'projection_heartbeat.txt').write_text(now, encoding='utf-8')
     assert pm._projection_online() is True
     assert pm._fish_online() is False
+    # 有代班钥匙时：投影心跳不该路由给本体，但信要由代班接住秒回
+    monkeypatch.setattr(pm, '_standin_config', lambda: ('https://x/v1', 'k', 'm'))
     monkeypatch.setattr(pm, '_call_standin_llm', lambda t: ('代班小鱼在岗', None))
 
     r = post(base, '/api/deep_chat', {'type': 'deep_chat', 'text': '在吗'})
@@ -179,6 +181,7 @@ def test_projection_heartbeat_never_routes_to_fish(base, tmp_path, monkeypatch):
 
 
 def test_deep_chat_standin_when_offline(base, tmp_path, monkeypatch):
+    monkeypatch.setattr(pm, '_standin_config', lambda: ('https://x/v1', 'k', 'm'))
     monkeypatch.setattr(pm, '_call_standin_llm', lambda t: ('代班小鱼在岗', None))
 
     r = post(base, '/api/deep_chat', {'type': 'deep_chat', 'text': '在吗'})
@@ -189,6 +192,20 @@ def test_deep_chat_standin_when_offline(base, tmp_path, monkeypatch):
     standins = [m for m in msgs if m['type'] == 'standin_reply']
     assert len(standins) == 1 and standins[0]['text'] == '代班小鱼在岗'
     assert any(m['type'] == 'deep_chat' for m in msgs)
+
+
+def test_deep_chat_pending_when_no_key(base, tmp_path, monkeypatch):
+    """无处代班（面板与环境变量都没有钥匙）：信不即焚，排队等本体+门铃叫醒。"""
+    monkeypatch.setattr(pm, '_standin_config', lambda: ('', '', ''))
+    monkeypatch.setattr(pm, '_call_standin_llm', lambda t: ('不该被调用', None))
+
+    r = post(base, '/api/deep_chat', {'type': 'deep_chat', 'text': '在吗'})
+    assert r['mode'] == 'pending_fish'
+    assert r['id']  # 信已落 outbox，本体回来必能看到
+
+    msgs = get(base, '/api/outbox/since/0')['messages']
+    assert any(m['type'] == 'deep_chat' for m in msgs)
+    assert not any(m['type'] == 'standin_reply' for m in msgs)
 
 
 def test_heartbeat_expiry(base, tmp_path):

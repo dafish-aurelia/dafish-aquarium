@@ -1,4 +1,4 @@
-// 鲸鱼娘后台：信局独家消费者 + 总开关 + 活跃 Tab 差量协调。
+﻿// 鲸鱼娘后台：信局独家消费者 + 总开关 + 活跃 Tab 差量协调。
 // 铁律：本文件不持有任何模型钥匙；代班由信局代理（设计文档 §3.5 方案 B）。
 
 const PORT_DEFAULT = 13140;
@@ -128,7 +128,19 @@ async function postHeartbeat() {
     const res = await mbJson('/api/heartbeat', { method: 'POST' });
     // 自迭代通道（主人授权）：信局转达刷新指令 → 立即重载扩展，
     // 让新版本内容脚本无需主人手动去 chrome://extensions 点按钮。
-    if (res && res.devReload) chrome.runtime.reload();
+    if (res && res.devReload) {
+      // Tell all tabs to refresh so new content scripts get injected after reload
+      try {
+        const tabs = await chrome.tabs.query({});
+        for (const t of tabs) {
+          if (t.id == null || t.url?.startsWith('chrome://')) continue;
+          chrome.tabs.sendMessage(t.id, { type: 'DEV_REFRESH_PAGE' }).catch(() => {});
+        }
+      } catch (e) { /* best effort */ }
+      // Small delay to let the message reach tabs before SW dies
+      await new Promise(r => setTimeout(r, 500));
+      chrome.runtime.reload();
+    }
   } catch (e) { /* 信局不在家：静默，等下个 alarm 再试 */ }
 }
 chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
@@ -212,6 +224,35 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // 审查五轮：钥匙表单住在扩展自有页面（独立源），宿主页脚本读不到
           chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
           sendResponse({ ok: true });
+          break;
+        }
+        case 'HARNESS_MODELS': {
+          try {
+            const res = await mbJson('/api/harness_models', { method: 'POST' });
+            sendResponse(res);
+          } catch (e) { sendResponse({ ok: false, error: String(e) }); }
+          break;
+        }
+        case 'HARNESS_SELECT_MODEL': {
+          try {
+            const res = await mbJson('/api/harness_select_model', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(msg.payload),
+            });
+            sendResponse(res);
+          } catch (e) { sendResponse({ ok: false, error: String(e) }); }
+          break;
+        }
+        case 'STANDIN_TEST_MODELS': {
+          try {
+            const res = await mbJson('/api/standin_test_models', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(msg.payload),
+            });
+            sendResponse(res);
+          } catch (e) { sendResponse({ ok: false, error: String(e) }); }
           break;
         }
         case 'MAILBOX_OUTBOX': {

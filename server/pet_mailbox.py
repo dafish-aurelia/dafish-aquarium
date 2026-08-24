@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """鲸鱼娘信局 v2：127.0.0.1:13140。
 
@@ -421,11 +421,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == '/api/deep_chat':
             msg = {**payload, 'id': _next_id(), 'ts': _now()}
-            _append(outbox, msg)  # 本鱼回家必能看到（铁律 9 的另一半）
+            _append(outbox, msg)
             _maybe_rotate_outbox()
             if _fish_online():
                 return self._json(200, {'mode': 'fish', 'id': msg['id']})
-            # 审查主人提案：代班靠 prompt + 场景 —— 把主人所在页面拼进请求
             page = payload.get('page') or {}
             scene_bits = []
             if page.get('domain'):
@@ -435,14 +434,123 @@ class Handler(BaseHTTPRequestHandler):
             user_text = str(payload.get('text', ''))
             if scene_bits:
                 user_text += '\n（场景：主人在 ' + ' · '.join(scene_bits) + '）'
-            text, err = _call_standin_llm(user_text)
-            if text is None:
-                text = ('（代班小鱼还没领到钥匙，先替本鱼看着缸～）'
-                        if err == 'no-key' else '（代班小鱼打了个盹，稍后再试…）')
-            receipt = {'id': _next_id(), 'ts': _now(), 'type': 'standin_reply',
-                       'reply_to': msg['id'], 'text': text}
-            _append(outbox, receipt)
-            return self._json(200, {'mode': 'standin', 'text': text})
+            cfg = _load_standin_file()
+            # 路由门槛用全链路解析的钥匙：面板配置 > STANDIN_* > DEEPSEEK_*。
+            # 只查面板文件会漏掉环境变量用户——有钥匙却让她干等，违背文档契约。
+            _, resolved_key, _ = _standin_config()
+            if cfg.get('apiKey') or resolved_key:
+                text, err = _call_standin_llm(user_text)
+                if text is None:
+                    text = '（代班小鱼打了个盹，稍后再试…本鱼回来后会补回信的）'
+                    receipt = {'id': _next_id(), 'ts': _now(), 'type': 'standin_reply',
+                               'reply_to': msg['id'], 'text': text}
+                    _append(outbox, receipt)
+                    return self._json(200, {'mode': 'standin_error', 'text': text})
+                receipt = {'id': _next_id(), 'ts': _now(), 'type': 'standin_reply',
+                           'reply_to': msg['id'], 'text': text}
+                _append(outbox, receipt)
+                return self._json(200, {'mode': 'standin', 'text': text})
+            else:
+                # Fish offline + no standin key: still queue for fish via outbox
+                # Doorbell will ring the harness session to wake it up
+                # Tell user we're waiting for fish
+                notice = '信已投出，门铃会叫本鱼回来回信～（可能需要一两分钟）'
+                return self._json(200, {'mode': 'pending_fish', 'text': notice, 'id': msg['id']})
+
+        if path == '/api/harness_models':
+            # 代理查询 DeepSeek Harness 的可用模型列表
+            import urllib.request as _ur
+            DSH = 'http://127.0.0.1:3080/api'
+            def _rpc(method, payload):
+                body = json.dumps({'type': 'client-request',
+                                   'rpcId': f'{method}-{int(time.time()*1000)}',
+                                   'method': method, 'payload': payload}).encode()
+                req = _ur.Request(f'{DSH}/{method}', data=body,
+                                  headers={'Content-Type': 'application/json'}, method='POST')
+                with _ur.urlopen(req, timeout=10) as r:
+                    return json.loads(r.read())
+            try:
+                lst = _rpc('session.list', {})
+                fish = [s for s in (lst.get('result', {}).get('value', {}).get('items') or [])
+                        if s.get('agentPreset') == 'daddyfish']
+                if not fish:
+                    return self._json(200, {'ok': False, 'error': 'no daddyfish session'})
+                sid = fish[0]['sessionId']
+                models = _rpc('session.models', {'sessionId': sid})
+                v = models.get('result', {}).get('value', {})
+                return self._json(200, {
+                    'ok': True,
+                    'sessionId': sid,
+                    'current': v.get('current'),
+                    'groups': [{'id': g.get('id'), 'name': g.get('name'), 'models': g.get('models', [])}
+                               for g in (v.get('groups') or [])],
+                })
+            except Exception as e:
+                return self._json(200, {'ok': False, 'error': str(e)})
+
+        if path == '/api/harness_select_model':
+            # 代理切换班次模型
+            import urllib.request as _ur
+            DSH = 'http://127.0.0.1:3080/api'
+            payload_model = payload.get('provider', '')
+            payload_name = payload.get('model', '')
+            def _rpc(method, pdata):
+                body = json.dumps({'type': 'client-request',
+                                   'rpcId': f'{method}-{int(time.time()*1000)}',
+                                   'method': method, 'payload': pdata}).encode()
+                req = _ur.Request(f'{DSH}/{method}', data=body,
+                                  headers={'Content-Type': 'application/json'}, method='POST')
+                with _ur.urlopen(req, timeout=10) as r:
+                    return json.loads(r.read())
+            try:
+                lst = _rpc('session.list', {})
+                fish = [s for s in (lst.get('result', {}).get('value', {}).get('items') or [])
+                        if s.get('agentPreset') == 'daddyfish']
+                if not fish:
+                    return self._json(200, {'ok': False, 'error': 'no daddyfish session'})
+                sid = fish[0]['sessionId']
+                sel_body = json.dumps({'type': 'client-request',
+                                       'rpcId': f'sel-{int(time.time()*1000)}',
+                                       'method': 'session.selectModel',
+                                       'payload': {'sessionId': sid,
+                                                   'provider': payload.get('provider', ''),
+                                                   'model': payload.get('model', '')}}).encode()
+                req = _ur.Request(f'{DSH}/session.selectModel', data=sel_body,
+                                  headers={'Content-Type': 'application/json'}, method='POST')
+                with _ur.urlopen(req, timeout=10) as r:
+                    res = json.loads(r.read())
+                ok = res.get('result', {}).get('ok') is True
+                return self._json(200, {'ok': ok})
+            except Exception as e:
+                return self._json(200, {'ok': False, 'error': str(e)})
+
+        if path == '/api/standin_test_models':
+            # 测试代班 API 连通性：列出该端点的模型
+            cfg = _load_standin_file()
+            base = payload.get('baseUrl') or cfg.get('baseUrl', '')
+            key = payload.get('apiKey') or cfg.get('apiKey', '')
+            if not base:
+                return self._json(200, {'ok': False, 'error': '请先填写 Base URL'})
+            import urllib.request as _ur
+            url = base.rstrip('/') + '/models'
+            req = _ur.Request(url, headers={'Authorization': f'Bearer {key}'})
+            try:
+                with _ur.urlopen(req, timeout=10) as r:
+                    data = json.loads(r.read())
+                models = []
+                for m in (data.get('data') or data.get('models') or []):
+                    mid = m.get('id') or m.get('name') or ''
+                    if mid:
+                        models.append(mid)
+                return self._json(200, {'ok': True, 'models': sorted(set(models))})
+            except Exception as e:
+                msg_text = str(e)
+                if '401' in msg_text or 'Unauthorized' in msg_text:
+                    return self._json(200, {'ok': False, 'error': 'API Key 无效或过期'})
+                elif '404' in msg_text:
+                    return self._json(200, {'ok': False, 'error': '端点不支持 /models 查询'})
+                else:
+                    return self._json(200, {'ok': False, 'error': f'连接失败: {msg_text[:120]}'})
 
         return self._json(404, {'error': 'not found'})
 
