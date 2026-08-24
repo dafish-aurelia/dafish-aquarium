@@ -39,6 +39,7 @@
         touched = true;
         V.setEmotion('shy', 4500); V.showBubble(TOUCH_LINES[Math.floor(Math.random() * TOUCH_LINES.length)], 4500);
         V.floatHearts(3);
+        try { window.DafeiyuMailbox.outbox({ type: 'pet_event', kind: 'headpat' }); } catch (e) {}
         addIntimacy(1);
         refreshIntimacy();
       }
@@ -161,6 +162,14 @@
       const line = FOODS.find((f) => f[0] === name)[3];
       V.setEmotion('happy', 4000); V.showBubble(`（${name} +好感）`, 4000);
       window.DafeiyuChat.append('她', `[吃掉了${name}] ${line}`);
+      // 让缸里的本鱼也知道投喂发生（30s 节流防刷屏）
+      try {
+        const now = Date.now();
+        if (!window.__dyLastFeedEv || now - window.__dyLastFeedEv > 30e3) {
+          window.__dyLastFeedEv = now;
+          window.DafeiyuMailbox.outbox({ type: 'pet_event', kind: 'feed', item: name });
+        }
+      } catch (e) { /* 信局不在家就算了 */ }
     });
     foodsBox.appendChild(btn);
   }
@@ -309,7 +318,8 @@
     '<button data-m="walk">🚶 自由散步</button>' +
     '<button data-m="follow">🖱️ 跟随鼠标</button>' +
     '<button data-m="still">🧘 原地待着</button>' +
-    '<button data-m="dodge">🫥 让个位（8秒）</button>';
+    '<button data-m="dodge">🫥 让个位（8秒）</button>' +
+    '<button data-m="home">🏠 回水缸</button>';
   modeMenu.style.display = 'none';
   document.documentElement.appendChild(modeMenu);
   V.guardEl && V.guardEl(modeMenu);
@@ -322,6 +332,12 @@
   });
   modeMenu.addEventListener('click', (e) => {
     const m = e.target?.dataset?.m;
+    if (m === 'home') {
+      const url = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
+      if (url) { try { window.DafeiyuMailbox.send({ type: 'OPEN_HOME', url }); } catch (e) {} }
+      modeMenu.style.display = 'none';
+      return;
+    }
     if (m === 'dodge') {
       // 暂时隐身让出点击区域，期间完全穿透；结束后按状态回归
       V.root.style.display = 'none';
@@ -349,6 +365,20 @@
   panel.style.display = 'none'; // 显式初始隐藏：面板平时由 CSS 隐藏，内联值为空会让旧版 isOpen() 恒真
   const log = panel.querySelector('.dafeiyu-chat-log');
   const conversationContext = [];
+  // 跨 Tab 续航（0.5.8）：上下文镜像到本地存储，换页/换 Tab 聊天不再失忆。
+  // 多 Tab 同时聊时后写覆盖先写，个人使用可接受；存储随 ctx_keep 裁剪。
+  let _ctxSaveT = null;
+  function persistCtx() {
+    clearTimeout(_ctxSaveT);
+    _ctxSaveT = setTimeout(() => {
+      try { chrome.storage.local.set({ chat_ctx: conversationContext.slice(-ctxKeep) }); } catch (e) {}
+    }, 400);
+  }
+  chrome.storage.local.get('chat_ctx').then(({ chat_ctx }) => {
+    if (Array.isArray(chat_ctx) && chat_ctx.length && conversationContext.length === 0) {
+      conversationContext.push(...chat_ctx);
+    }
+  }).catch(() => {});
   // 上下文保留条数：设置面板可调（审查主人提案），默认 12，范围 4~40
   let ctxKeep = 12;
   chrome.storage.local.get('ctx_keep').then(({ ctx_keep: k = 12 }) => {
@@ -375,6 +405,7 @@
       while (log.children.length > 50) log.removeChild(log.firstChild);
       log.scrollTop = log.scrollHeight;
       conversationContext.push({ who, text });
+      persistCtx();
       // 审查#10 + 主人提案：存储裁剪阈值由设置面板 ctx_keep 驱动
       if (conversationContext.length > ctxKeep + 6) {
         conversationContext.splice(0, conversationContext.length - ctxKeep);

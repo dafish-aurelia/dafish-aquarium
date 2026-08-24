@@ -226,6 +226,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           } catch (e) { sendResponse({ ok: false, reason: 'offline' }); }
           break;
         }
+        case 'OPEN_HOME': {
+          // 内容脚本无 tabs 特权，代为开水缸主页（URL 来自扩展自身消息）
+          const u = String(msg.url || '');
+          if (/^(file|https?):/.test(u)) chrome.tabs.create({ url: u });
+          sendResponse({ ok: true });
+          break;
+        }
         case 'OPEN_STANDIN_SETTINGS': {
           // 审查五轮：钥匙表单住在扩展自有页面（独立源），宿主页脚本读不到
           chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
