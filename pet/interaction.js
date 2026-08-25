@@ -264,6 +264,13 @@
   const modelSel = settingsPanel.querySelector('.dy-model');
   const modelState = settingsPanel.querySelector('.dy-model-state');
 
+  // 网络类异常翻译成人话（信局没启动时 raw TypeError 很吓人）
+  function friendlyErr(e) {
+    const m = String((e && e.message) || e);
+    if (/Failed to fetch/i.test(m)) return '信局不在家（重启电脑后需运行 scripts/start_dafeiyu.py）';
+    return m;
+  }
+
   async function loadModels() {
     modelState.textContent = '';
     modelSel.innerHTML = '<option value="">加载中…</option>';
@@ -292,7 +299,7 @@
       }
     } catch (e) {
       modelSel.innerHTML = '<option value="">不可用</option>';
-      modelState.textContent = '⚠ ' + e.message;
+      modelState.textContent = '⚠ ' + friendlyErr(e);
     }
   }
 
@@ -311,7 +318,7 @@
         modelState.textContent = '⚠ 切换失败';
       }
     } catch (e) {
-      modelState.textContent = '⚠ ' + e.message;
+      modelState.textContent = '⚠ ' + friendlyErr(e);
     }
   });
 
