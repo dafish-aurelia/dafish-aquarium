@@ -1,4 +1,4 @@
-﻿// 鲸鱼娘后台：信局独家消费者 + 总开关 + 活跃 Tab 差量协调。
+// 鲸鱼娘后台：信局独家消费者 + 总开关 + 活跃 Tab 差量协调。
 // 铁律：本文件不持有任何模型钥匙；代班由信局代理（设计文档 §3.5 方案 B）。
 
 const PORT_DEFAULT = 13140;
@@ -102,6 +102,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'pet-poll') startInboxLoop();
   if (alarm.name === 'pet-heartbeat') postHeartbeat();
   if (alarm.name === 'pet-mood') accumulateMood();
+  if (alarm.name === 'pet-gate') { try { connectGatekeeper(); } catch (e) { console.error('[gate]', e); } }
 });
 
 let inboxLoopRunning = false;
@@ -191,8 +192,32 @@ async function postHeartbeat() {
 chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
 chrome.alarms.create('pet-poll', { periodInMinutes: 1 });      // 同上：收信看门狗一并补挂
 chrome.alarms.create('pet-mood', { periodInMinutes: 1 });      // v0.7 摸鱼指数累积
+chrome.alarms.create('pet-gate', { periodInMinutes: 0.5 });    // v0.7.2 门卫断线看门狗
 accumulateMood();
 postHeartbeat();
+
+// ---- v0.7.2 门卫（Native Messaging 寄生）----
+// 后勤看护住在 Chrome 里：SW 冷启动即 connectNative 拉起看护进程，
+// 看护负责确保信局+门铃在岗。SW 活跃期间（inboxLoop 长轮询）连接保持；
+// Chrome 关闭/SW 意外休眠 → 看护 stdin EOF → 它自己启动"5分钟宽限遗嘱"
+// 决定是否送服务下班。pet-gate alarm 只作断线重连看门狗。
+var _gatePort = null; // var 而非 let：alarm 回调可能在顶层执行完成前触发，let 的 TDZ 会把 SW 炸死
+function connectGatekeeper() {
+  if (_gatePort) return; // 已连接
+  try {
+    const port = chrome.runtime.connectNative('dafeiyu_gatekeeper');
+    _gatePort = port;
+    port.onMessage.addListener((m) => {
+      if (m && m.type === 'pong') console.log('[gate] 看护应答:', JSON.stringify(m));
+    });
+    port.onDisconnect.addListener(() => {
+      const err = chrome.runtime.lastError;
+      console.log('[gate] 看护断开', err ? String(err.message || err) : '');
+      _gatePort = null; // pet-gate alarm 会负责重连
+    });
+    port.postMessage({ type: 'pulse', ts: Date.now() });
+  } catch (e) { console.error('[gate] connectNative 失败:', e); }
+}
 
 // 信局地址钉死（审查#11：mailboxPort 全工程无写入方，属幽灵配置，删除读取分支）
 function mailboxBase() {

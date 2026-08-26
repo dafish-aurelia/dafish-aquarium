@@ -1,0 +1,9 @@
+{
+  "name": "dafeiyu_gatekeeper",
+  "description": "鲸鱼娘后勤看门人：寄生 Chrome，确保信局+门铃随浏览器起落",
+  "path": "G:\\life\\Aurelia的工作区\\apps\\dafeiyu-extension\\native-host\\gatekeeper-host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://hfokmdknmpbdkpdogpfmcmgfnchpelpi/"
+  ]
+}
