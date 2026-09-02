@@ -4,3 +4,4 @@ data/
 .pytest_cache/
 *弃用*
 native-host/.gen/
+native-host/generated/
