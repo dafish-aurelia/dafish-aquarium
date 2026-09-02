@@ -5,6 +5,21 @@
   const $ = (sel) => document.querySelector(sel);
   const state = $('#state');
 
+  // 水缸主页（v0.8）：默认空 = 珊瑚礁页；显式填了才跳外部页。
+  // 只依赖 chrome.storage（不经信局），故放在信局自举之前——信局不在家也能配。
+  const savedHome = await new Promise((res) =>
+    chrome.storage.local.get('home_url', ({ home_url }) => res(home_url || '')));
+  $('#home-url').value = savedHome;
+  $('#save-home').addEventListener('click', async () => {
+    const v = $('#home-url').value.trim();
+    if (v && !/^(file|https?):/i.test(v)) {
+      $('#home-state').textContent = '要以 file:// 或 http(s):// 开头哦';
+      return;
+    }
+    await chrome.storage.local.set({ home_url: v });
+    $('#home-state').textContent = v ? '已保存 ✓ 新标签页将跳转你的水缸' : '已保存 ✓ 用珊瑚礁页当家';
+  });
+
   // 令牌自举：Host 钉扎端点，扩展页经 host_permissions 可直连
   async function token() {
     const r = await fetch(MAILBOX + '/api/token');

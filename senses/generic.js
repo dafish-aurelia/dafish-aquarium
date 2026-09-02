@@ -6,8 +6,10 @@
 
   function homeNow() {
     try {
-      return decodeURIComponent(location.href)
-        .startsWith(window.DafeiyuSanitize.HOME_URL);
+      const h = window.DafeiyuSanitize.HOME_URL;
+      // v0.8：默认空串 = 珊瑚礁页即家；空前缀会匹配一切页面，
+      // 必须显式判空，否则任何网页都会被误判为"家"。
+      return !!h && decodeURIComponent(location.href).startsWith(h);
     } catch (e) { return false; }
   }
 

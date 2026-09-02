@@ -23,6 +23,7 @@
       box-shadow: 0 10px 30px rgba(0, 40, 80, 0.35);
     }
     h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 20px 0 0; }
     p.tip { font-size: 12px; color: #56789a; margin: 0 0 14px; line-height: 1.6; }
     label { display: block; font-size: 12px; color: #2b7fc4; margin: 12px 0 4px; font-weight: bold; }
     input {
@@ -49,6 +50,7 @@
       cursor: pointer;
     }
     #state { display: block; margin-top: 10px; font-size: 12px; color: #56789a; min-height: 18px; text-align: center; }
+    #home-state { display: block; margin-top: 10px; font-size: 12px; color: #56789a; min-height: 18px; text-align: center; }
     .ok { color: #178a50; }
     select {
       appearance: auto;
@@ -66,6 +68,15 @@
       本页是扩展自有页面（chrome-extension:// 独立源），宿主网页的脚本无法读取这里的输入。
       代班小鱼在缸里的本鱼离线时顶班回复；她无长期记忆，配置仅保存在本地信局。
     </p>
+    <h2>🏠 水缸主页</h2>
+    <p class="tip">
+      新标签页默认就是珊瑚礁页。想让她直接回你的本地水缸主页
+      （file:// 或 https:// 开头）？填在这里。留空 = 用珊瑚礁页。
+    </p>
+    <div class="row"><label for="home-url">主页地址</label><input id="home-url" type="url" placeholder="file:///D:/my-tank/start.html"></div>
+    <button id="save-home">💾 保存主页</button>
+    <span id="home-state"></span>
+    <h2>🎣 代班 API</h2>
     <div class="row"><label for="k">API Key</label><input id="k" type="password" autocomplete="off" placeholder="留空 = 不修改已保存的钥匙"></div>
     <div class="row"><label for="u">Base URL</label><input id="u" type="text" placeholder="https://api.siliconflow.cn/v1"></div>
     <div class="row"><label for="m">Model</label><input id="m" type="text" placeholder="deepseek-ai/DeepSeek-V3"></div>

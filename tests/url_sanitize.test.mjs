@@ -21,3 +21,11 @@ test('非法输入返回空串', () => {
   assert.equal(r.url, '');
   assert.equal(r.domain, '');
 });
+
+test('HOME_URL 默认为空：珊瑚礁页就是默认家', () => {
+  // node 上下文：无 chrome.storage，HOME_URL 保持出厂默认。
+  // v0.8 解硬编码：默认空串 = 不再内置 file:///G:/... 出厂路径，
+  // 珊瑚礁页（newtab.html）即家；外部水缸仅在 storage.home_url 显式配置后生效。
+  assert.equal(globalThis.DafeiyuSanitize.HOME_URL, '');
+  assert.equal(globalThis.DafeiyuSanitize.DEFAULT_HOME, '');
+});

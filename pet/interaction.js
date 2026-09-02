@@ -359,7 +359,9 @@
     }
     if (m === 'home') {
       const url = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
+      // v0.8：默认空 = 未配置外部水缸；去珊瑚礁页（newtab）而非静默失灵
       if (url) { try { window.DafeiyuMailbox.send({ type: 'OPEN_HOME', url }); } catch (e) {} }
+      else { try { window.DafeiyuMailbox.send({ type: 'OPEN_HOME', url: chrome.runtime.getURL('newtab.html') }); } catch (e) {} }
       modeMenu.style.display = 'none';
       return;
     }

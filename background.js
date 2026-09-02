@@ -301,8 +301,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         case 'OPEN_HOME': {
           // 内容脚本无 tabs 特权，代为开水缸主页（URL 来自扩展自身消息）
+          // v0.8：默认家 = 珊瑚礁页（newtab），显式配了 storage.home_url 才跳外部水缸；
+          // 除 file/http(s) 外也放行本扩展自有的 newtab 页（等同跳板）。
           const u = String(msg.url || '');
-          if (/^(file|https?):/.test(u)) chrome.tabs.create({ url: u });
+          if (/^(file|https?):/.test(u) || u === chrome.runtime.getURL('newtab.html')) {
+            chrome.tabs.create({ url: u });
+          }
           sendResponse({ ok: true });
           break;
         }

@@ -1,21 +1,20 @@
 // 新标签页跳板（MV3 禁内联脚本，逻辑必须住外部文件）：
-// 只走 chrome.tabs.update 特权通道这一条路；目标 = storage.home_url 覆盖值，
-// 没有才回落出厂默认（可移植性：搬家后在兜底页里重设即可，不用改代码）。
-// 失败 = 未开「允许访问文件网址」或文件不存在 → 显示指引 + 重设入口。
+// v0.8 语义反转：默认留在珊瑚礁页（这里就是家），仅在用户显式配置
+// storage.home_url 时才跳外部水缸。失败（file 不存在/未授权）显示指引。
 (async function bootTankRedirect() {
-  let tank = window.DafeiyuSanitize && window.DafeiyuSanitize.HOME_URL;
+  let tank = null;
   try {
     const { home_url } = await chrome.storage.local.get('home_url');
-    if (home_url) { tank = home_url; window.DafeiyuSanitize.setHomeUrl(home_url); }
-  } catch (e) { /* storage 不可达：用默认 */ }
-  if (!tank) return;
+    if (home_url) tank = home_url;
+  } catch (e) { /* storage 不可达：留在珊瑚礁页 */ }
+  if (!tank) return; // 未配置外部水缸：珊瑚礁页就是家，什么都不做
   try {
     const tab = await new Promise((res) => chrome.tabs.getCurrent(res));
     if (!tab || tab.id == null) return;
     // 先探测再跳：file 不存在时 tabs.update 会落到 Chrome 报错页，不如留在兜底页
     if (await urlReachable(tank)) {
       await chrome.tabs.update(tab.id, { url: tank });
-      return; // 成功跳走，本页使命结束
+      return;
     }
   } catch (e) {}
   showFallback(tank);
