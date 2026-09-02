@@ -12,12 +12,14 @@
   $('#home-url').value = savedHome;
   $('#save-home').addEventListener('click', async () => {
     const v = $('#home-url').value.trim();
-    if (v && !/^(file|https?):/i.test(v)) {
+    if (v && !/^(file|https?):/.test(v)) {
       $('#home-state').textContent = '要以 file:// 或 http(s):// 开头哦';
+      $('#home-state').className = 'error';
       return;
     }
     await chrome.storage.local.set({ home_url: v });
     $('#home-state').textContent = v ? '已保存 ✓ 新标签页将跳转你的水缸' : '已保存 ✓ 用珊瑚礁页当家';
+    $('#home-state').className = 'ok';
   });
 
   // 令牌自举：Host 钉扎端点，扩展页经 host_permissions 可直连
