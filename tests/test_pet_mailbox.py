@@ -255,3 +255,15 @@ def test_standin_config_precedence(base, monkeypatch):
     monkeypatch.delenv('DEEPSEEK_MODEL', raising=False)
     b, k, m = cfg()
     assert b == 'https://api.deepseek.com/v1' and k == '' and m == 'deepseek-chat'
+
+
+def test_post_rejects_oversized_body(base):
+    """审查#4：请求体超上限按 413 拒绝，而不是全量读进内存。"""
+    big = json.dumps({'text': 'x' * (pm.MAX_BODY_BYTES + 1)}).encode()
+    req = urllib.request.Request(base + '/api/outbox', data=big,
+                                 headers={'Content-Type': 'application/json',
+                                          'X-Dafeiyu-Token': _token(base)},
+                                 method='POST')
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        urllib.request.urlopen(req)
+    assert ei.value.code == 413
