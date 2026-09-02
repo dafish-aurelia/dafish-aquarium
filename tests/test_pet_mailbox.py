@@ -267,3 +267,17 @@ def test_post_rejects_oversized_body(base):
     with pytest.raises(urllib.error.HTTPError) as ei:
         urllib.request.urlopen(req)
     assert ei.value.code == 413
+
+
+def test_post_accepts_body_at_exact_limit(base):
+    """边界：恰好 MAX_BODY_BYTES 的请求体必须放行（防 > 被改成 >= 的回归）。"""
+    # 构造一个 JSON，使其序列化后的字节长度恰好等于 MAX_BODY_BYTES
+    overhead = len(json.dumps({'text': ''}))  # {"text": ""} 的骨架长度
+    exact = json.dumps({'text': 'x' * (pm.MAX_BODY_BYTES - overhead)}).encode()
+    assert len(exact) == pm.MAX_BODY_BYTES
+    req = urllib.request.Request(base + '/api/outbox', data=exact,
+                                 headers={'Content-Type': 'application/json',
+                                          'X-Dafeiyu-Token': _token(base)},
+                                 method='POST')
+    with urllib.request.urlopen(req) as r:
+        assert json.loads(r.read())['ok'] is True
