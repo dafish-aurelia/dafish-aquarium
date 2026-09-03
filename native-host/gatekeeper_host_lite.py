@@ -66,10 +66,48 @@ def _mailbox_alive():
 
 def _ensure_mailbox():
     if _mailbox_alive():
+        _ensure_doorbell()  # 信局在岗才管门铃（门铃依赖信局收信）
         return
     subprocess.Popen([sys.executable, MAILBOX],
                      creationflags=0x08000000,  # NO_WINDOW
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _ensure_doorbell()
+
+
+def _doorbell_running():
+    """按命令行子串探门铃进程（wmic 的 CIM 替代，轻量不拉 PowerShell）。"""
+    try:
+        import subprocess as _sp
+        r = _sp.run(
+            ['powershell', '-NoProfile', '-Command',
+             "(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+             "Where-Object { $_.CommandLine -like '*mailbox_doorbell.py*' }).Count"],
+            capture_output=True, text=True, timeout=15)
+        return int(r.stdout.strip() or '0') > 0
+    except Exception:
+        return True  # 探测失败保守视为在（避免重复拉起）
+
+
+def _ensure_doorbell():
+    """v0.8.3：门铃随 Chrome 起落。门铃断了当值链路就断了——
+    gatekeeper 作为唯一随 Chrome 常驻的宿主，负责把门铃补位。
+    日志写 data/pet-mailbox/doorbell-live.log（黑匣子可验尸）。"""
+    try:
+        if _doorbell_running():
+            return
+        # EXT_ROOT = <ws>/apps/dafeiyu-extension → 工作区根要再上两级
+        doorbell = os.path.join(os.path.dirname(os.path.dirname(EXT_ROOT)),
+                                'scripts', 'mailbox_doorbell.py')
+        if not os.path.exists(doorbell):
+            return
+        log_path = os.path.join(os.path.dirname(HEARTBEAT_FILE), 'doorbell-live.log')
+        log = open(log_path, 'ab', buffering=1)
+        log.write(f'\n==== gatekeeper launch {time.strftime("%m-%d %H:%M:%S")} ====\n'.encode())
+        subprocess.Popen([sys.executable, doorbell],
+                         creationflags=0x01000000 | 0x08000000,  # BREAKAWAY | NO_WINDOW
+                         stdout=log, stderr=subprocess.STDOUT)
+    except Exception as e:  # noqa: BLE001
+        print(f'[host-lite] 拉起门铃失败: {e}', file=sys.stderr)
 
 
 def _heartbeat_stale_s():
