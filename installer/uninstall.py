@@ -6,7 +6,9 @@ import sys
 from pathlib import Path
 
 NM_HOST_NAME = 'dafeiyu_gatekeeper'
-REG_KEY = rf'HKCU\Software\Google\Chrome\NativeMessagingHosts\{NM_HOST_NAME}'
+REG_KEY = 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\' + NM_HOST_NAME
+# 注意：此键是唯一的——若你手工把注册表指向了别的 manifest（如仓库模板），
+# 卸载也会一并删掉；需要保留手工注册的话，先备份再卸载。
 
 
 def main():

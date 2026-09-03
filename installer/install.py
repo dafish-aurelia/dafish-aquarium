@@ -11,7 +11,9 @@ from pathlib import Path
 
 PINNED_EXT_ID = 'bekeaffohpngiaidlffmfmjohjflmail'  # manifest key 钉死
 NM_HOST_NAME = 'dafeiyu_gatekeeper'
-REG_KEY = rf'Software\Google\Chrome\NativeMessagingHosts\{NM_HOST_NAME}'
+# 双反斜杠拼接而非 rf-string：rf 下 \Google 等片段看似安全，但改写成 f-string
+# 时 \d 之类会变转义——显式转义杜绝这一整类事故。
+REG_KEY = 'Software\\Google\\Chrome\\NativeMessagingHosts\\' + NM_HOST_NAME
 EXT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -104,7 +106,7 @@ def main():
 
     if args.registry:
         abs_mf = str(mf_path.resolve())
-        r = subprocess.run(['reg', 'add', rf'HKCU\{REG_KEY}',
+        r = subprocess.run(['reg', 'add', 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\' + NM_HOST_NAME,
                             '/ve', '/t', 'REG_SZ', '/d', abs_mf, '/f'],
                            capture_output=True, text=True)
         if r.returncode == 0:
