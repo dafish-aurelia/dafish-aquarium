@@ -1,3 +1,5 @@
 @echo off
-rem Dafeiyu gatekeeper Native Messaging host (launched by Chrome)
-"G:\life\AURELI~1\VENV~1\Scripts\python.exe" "G:\life\AURELI~1\scripts\dafeiyu_gatekeeper_host.py"
+rem Dafeiyu gatekeeper Native Messaging host - TEMPLATE ONLY (v0.8).
+rem The real host is generated per-machine by installer/install.py into
+rem native-host/generated/dafeiyu_gatekeeper.bat (8.3 short paths, ASCII).
+rem Do NOT register this file. Do NOT hardcode machine paths here.

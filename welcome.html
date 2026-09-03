@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>欢迎回家 · 大肥鱼</title>
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <main class="wizard">
+    <div class="whale">🐳</div>
+    <h1>欢迎回家！本鱼已经搬进你的浏览器啦</h1>
+    <ol class="steps">
+      <li class="step" id="s0">
+        <h2>第一步 · 认识她（已完成 ✓）</h2>
+        <p>她已经在新标签页等你了。纯看她在屏幕底部游来游去，不配置任何东西也很好——
+           摸鱼指数、看剧礼仪、摸头、投喂，全部开箱即用。</p>
+      </li>
+      <li class="step" id="s1">
+        <h2>第二步 · 填不填 API Key 由你（可选）</h2>
+        <p>不填：她只会说内置台词（离线模式）。填了：本鱼不在时会有代班小鱼回你的信。</p>
+        <button id="open-key">🔑 打开代班设置页</button>
+      </li>
+      <li class="step" id="s2">
+        <h2>第三步 · 高级：接上你自己的“本体”（可选）</h2>
+        <p>如果你有自己的 agent 本体（读信桥 + 门铃），参考仓库文档接上信局，
+           她就有真正的长期记忆。没有也没关系，第二步的代班足够日常。</p>
+      </li>
+    </ol>
+    <button id="skip-all" class="ghost">全部跳过，直接开始</button>
+  </main>
+  <script src="js/welcome.js"></script>
+</body>
+</html>

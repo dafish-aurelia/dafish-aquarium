@@ -1,0 +1,22 @@
+/* welcome.css —— 与 newtab.css 同源的深海风 */
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #04222f 0%, #0a3550 100%);
+  color: #bfe3ff;
+  font: 15px/1.8 system-ui, 'Microsoft YaHei', sans-serif;
+}
+.wizard { max-width: 640px; padding: 40px 28px; }
+.whale { font-size: 64px; text-align: center; animation: bob 3s ease-in-out infinite; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+h1 { font-size: 22px; text-align: center; }
+.steps { list-style: none; padding: 0; display: grid; gap: 18px; }
+.step { background: rgba(255,255,255,.06); border: 1px solid rgba(191,227,255,.18);
+        border-radius: 14px; padding: 18px 22px; }
+.step h2 { font-size: 16px; margin: 0 0 6px; }
+button { cursor: pointer; border: 0; border-radius: 8px; padding: 8px 16px;
+         background: #39c5ff; color: #04222f; font-weight: 600; }
+button.ghost { background: transparent; color: #7ba3c4; border: 1px solid rgba(123,163,196,.4); }
+#skip-all { display: block; margin: 24px auto 0; }

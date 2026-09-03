@@ -97,6 +97,7 @@ def _append(path, obj):
 
 
 OUTBOX_ROTATE_BYTES = 5 * 1024 * 1024  # 审查四轮P2-6：只追加文件的超大化防线
+MAX_BODY_BYTES = 256 * 1024  # 审查#4：POST 体上限 256KB（信件/配置绰绰有余）
 
 
 def _maybe_rotate_outbox():
@@ -358,6 +359,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_post(self):
         n = int(self.headers.get('Content-Length', 0) or 0)
+        if n > MAX_BODY_BYTES:  # 审查#4：超限拒收，读都不读
+            return self._json(413, {'error': 'payload too large'})
         path = self.path.split('?')[0]
         if not self._authorized():
             return

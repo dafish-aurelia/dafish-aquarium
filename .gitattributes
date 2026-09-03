@@ -1,0 +1,4 @@
+# Windows batch files must always have CRLF endings, regardless of
+# platform/autocrlf settings (cmd parses LF-only bats fine but some
+# tools and old editors do not; generated bats are CRLF by construction).
+*.bat text eol=crlf

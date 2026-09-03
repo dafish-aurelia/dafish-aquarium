@@ -72,9 +72,13 @@ chrome.action.onClicked.addListener(async () => {
 });
 
 // 独家收信：长轮询循环（信到秒推）。alarm 仅作看门狗，循环死了就拉起来。
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('pet-poll', { periodInMinutes: 1 });
   chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 });
+  // v0.8 首装向导：只在全新安装时弹一次；更新/重载不打扰
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+  }
 });
 // v0.7 摸鱼指数：活跃 Tab 场景分类（与 senses 同一套正则的 SW 侧副本）
 const SCENE_WORK = /(^|\.)github\.com$|(^|\.)stackoverflow\.com$|(^|\.)gitee\.com$|(^|\.)juejin\.cn$|(^|\.)csdn\.net$/;
@@ -301,8 +305,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         case 'OPEN_HOME': {
           // 内容脚本无 tabs 特权，代为开水缸主页（URL 来自扩展自身消息）
+          // v0.8：默认家 = 珊瑚礁页（newtab），显式配了 storage.home_url 才跳外部水缸；
+          // 除 file/http(s) 外也放行本扩展自有的 newtab 页（等同跳板）。
           const u = String(msg.url || '');
-          if (/^(file|https?):/.test(u)) chrome.tabs.create({ url: u });
+          if (/^(file|https?):/.test(u) || u === chrome.runtime.getURL('newtab.html')) {
+            chrome.tabs.create({ url: u });
+          }
           sendResponse({ ok: true });
           break;
         }
