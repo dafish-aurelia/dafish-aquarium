@@ -72,9 +72,13 @@ chrome.action.onClicked.addListener(async () => {
 });
 
 // 独家收信：长轮询循环（信到秒推）。alarm 仅作看门狗，循环死了就拉起来。
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('pet-poll', { periodInMinutes: 1 });
   chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 });
+  // v0.8 首装向导：只在全新安装时弹一次；更新/重载不打扰
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+  }
 });
 // v0.7 摸鱼指数：活跃 Tab 场景分类（与 senses 同一套正则的 SW 侧副本）
 const SCENE_WORK = /(^|\.)github\.com$|(^|\.)stackoverflow\.com$|(^|\.)gitee\.com$|(^|\.)juejin\.cn$|(^|\.)csdn\.net$/;
