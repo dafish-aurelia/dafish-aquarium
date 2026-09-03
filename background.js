@@ -80,6 +80,17 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
   }
 });
+// v0.8.3 冷启动保险：Chrome 152 对 unpacked 扩展实测——浏览器重启后
+// alarm 投递失效、tabs 事件不唤醒 SW（心跳断流两整天事故）。onStartup 是
+// 唯一保证在浏览器启动时投递的事件，收到即跑一次完整自检。
+chrome.runtime.onStartup.addListener(() => {
+  try {
+    startInboxLoop();
+    postHeartbeat();
+    connectGatekeeper();
+  } catch (e) { console.error('[startup] 自检失败:', e); }
+});
+
 // v0.7 摸鱼指数：活跃 Tab 场景分类（与 senses 同一套正则的 SW 侧副本）
 const SCENE_WORK = /(^|\.)github\.com$|(^|\.)stackoverflow\.com$|(^|\.)gitee\.com$|(^|\.)juejin\.cn$|(^|\.)csdn\.net$/;
 const SCENE_VIDEO = /(^|\.)bilibili\.com$|(^|\.)youtube\.com$|(^|\.)iqiyi\.com$|(^|\.)youku\.com$|(^|\.)netflix\.com$/;
@@ -199,7 +210,6 @@ chrome.alarms.create('pet-mood', { periodInMinutes: 1 });      // v0.7 摸鱼指
 chrome.alarms.create('pet-gate', { periodInMinutes: 0.5 });    // v0.7.2 门卫断线看门狗
 accumulateMood();
 postHeartbeat();
-
 // ---- v0.7.2 门卫（Native Messaging 寄生）----
 // 后勤看护住在 Chrome 里：SW 冷启动即 connectNative 拉起看护进程，
 // 看护负责确保信局+门铃在岗。SW 活跃期间（inboxLoop 长轮询）连接保持；
@@ -233,6 +243,9 @@ function connectGatekeeper() {
     port.postMessage({ type: 'pulse', ts: Date.now() });
   } catch (e) { console.error('[gate] connectNative 失败:', e); }
 }
+// v0.8.3 顶层直连看护：原先只挂在 pet-gate alarm（30s 后才连），而闹钟在
+// 死 SW 身上不响——顶层这一句才是"冷启动即拉起看护"的真正兑现。
+connectGatekeeper();
 
 // 信局地址钉死（审查#11：mailboxPort 全工程无写入方，属幽灵配置，删除读取分支）
 function mailboxBase() {

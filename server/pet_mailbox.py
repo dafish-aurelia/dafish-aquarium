@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """鲸鱼娘信局 v2：127.0.0.1:13140。
 
@@ -37,6 +37,74 @@ LOCK = threading.RLock()
 MSG_COND = threading.Condition(LOCK)
 TZ = timezone(timedelta(hours=8))
 HEARTBEAT_TTL = timedelta(minutes=15)   # 本鱼心跳 TTL（读信桥当值期间每轮续命）
+
+
+def _dsh_cookie():
+    """v0.8.3：给 DSH Web API 代理请求签一张浏览器会话 Cookie。
+
+    DSH 的 /api/* 需要签名 Cookie（同源浏览器 GUI 会话）。凭据密钥存在
+    ~/.dsh/.credentials.yaml 的 client-connection/browser-session 记录里，
+    与 DSH Web 进程共享——信局用它本地签发一枚 30 天会话 Cookie。
+    Cookie 文件缓存于 data/pet-mailbox/dsh_cookie.txt，过期自动重签。
+    """
+    import base64
+    import hashlib
+    import hmac as _hmac
+    import time as _time
+    from pathlib import Path as _Path
+    try:
+        import yaml  # type: ignore
+    except ImportError:  # PyYAML 不可用则读不了密钥，退化成无 Cookie
+        return ''
+    auth = '127.0.0.1:3080'
+    cache = BASE_DIR / 'dsh_cookie.txt'
+    now = _time.time()
+    # 缓存命中（30 天期，提前 1 天过期就算旧）
+    if cache.exists():
+        try:
+            cached = cache.read_text(encoding='utf-8').strip()
+            if cached and '=' in cached:
+                name = cached.split('=', 1)[0]
+                b64 = cached.split('=', 1)[1]
+                parts = b64.split('.')
+                if len(parts) == 3:
+                    pad = '=' * ((4 - len(parts[1]) % 4) % 4)
+                    import json as _json
+                    payload = _json.loads(base64.urlsafe_b64decode(parts[1] + pad))
+                    if payload.get('expiresAt', 0) / 1000 > now + 86400:
+                        return cached
+        except Exception:
+            pass
+    # 读签名密钥
+    try:
+        cred = _Path.home() / '.dsh' / '.credentials.yaml'
+        doc = yaml.safe_load(cred.read_text(encoding='utf-8')) or {}
+        record = (doc.get('records') or {}).get('client-connection/browser-session') or {}
+        secret_b64 = (record.get('payload') or {}).get('secret', '')
+    except Exception:
+        return ''
+    if not secret_b64:
+        return ''
+    pad = '=' * ((4 - len(secret_b64) % 4) % 4)
+    secret = base64.urlsafe_b64decode(secret_b64 + pad)
+
+    def _b64u(data: bytes) -> str:
+        return base64.urlsafe_b64encode(data).decode().rstrip('=')
+
+    name = 'dsh-auth-' + _b64u(hashlib.sha256(auth.encode()).digest())
+    issued = int(now * 1000)
+    expires = issued + 30 * 86400 * 1000
+    import json as _json2
+    body = _b64u(_json2.dumps({'version': 1, 'authority': auth,
+                               'issuedAt': issued, 'expiresAt': expires},
+                              separators=(',', ':')).encode())
+    sig = _hmac.new(secret, body.encode(), hashlib.sha256).digest()
+    cookie = f'{name}=v1.{body}.{_b64u(sig)}'
+    try:
+        cache.write_text(cookie, encoding='utf-8')
+    except Exception:
+        pass
+    return cookie
 PROJECTION_TTL = timedelta(minutes=5)   # 投影心跳 TTL（扩展 SW 每分钟续命）
 
 STANDIN_PROMPT = (
@@ -462,29 +530,36 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == '/api/harness_models':
             # 代理查询 DeepSeek Harness 的可用模型列表
+            # v0.8.3 修复 401/404：DSH Web API 需要 (a) dsh-auth-* 签名 Cookie，
+            # (b) /api/{a/b} 斜杠端点，(c) payload 必须 {"args": {...}}，
+            # (d) 模型目录端点是 session/modelCatalog。
             import urllib.request as _ur
-            DSH = 'http://127.0.0.1:3080/api'
-            def _rpc(method, payload):
+            _DSH = 'http://127.0.0.1:3080/api'
+            def _rpc(method, args):
                 body = json.dumps({'type': 'client-request',
-                                   'rpcId': f'{method}-{int(time.time()*1000)}',
-                                   'method': method, 'payload': payload}).encode()
-                req = _ur.Request(f'{DSH}/{method}', data=body,
-                                  headers={'Content-Type': 'application/json'}, method='POST')
+                                   'rpcId': f'fish-{method}-{int(time.time()*1000)}',
+                                   'method': method, 'payload': {'args': args}}).encode()
+                req = _ur.Request(f'{_DSH}/{method}', data=body,
+                                   headers={'Content-Type': 'application/json',
+                                            'Cookie': _dsh_cookie(),
+                                            'Host': '127.0.0.1:3080'}, method='POST')
                 with _ur.urlopen(req, timeout=10) as r:
                     return json.loads(r.read())
             try:
-                lst = _rpc('session.list', {})
+                lst = _rpc('session/list', {'_request': {}})
                 fish = [s for s in (lst.get('result', {}).get('value', {}).get('items') or [])
-                        if s.get('agentPreset') == 'daddyfish']
+                        if ((s.get('projections') or {}).get('values') or {}).get('agentPreset') == 'daddyfish']
                 if not fish:
                     return self._json(200, {'ok': False, 'error': 'no daddyfish session'})
+                # 最新更新的班次优先（running 会话的 updatedAt 持续刷新，自然排最前）
+                fish.sort(key=lambda s: s.get('updatedAt', 0), reverse=True)
                 sid = fish[0]['sessionId']
-                models = _rpc('session.models', {'sessionId': sid})
+                models = _rpc('session/modelCatalog', {})
                 v = models.get('result', {}).get('value', {})
                 return self._json(200, {
                     'ok': True,
                     'sessionId': sid,
-                    'current': v.get('current'),
+                    'current': v.get('default'),  # 目录端点给的是全局默认，非会话级当前
                     'groups': [{'id': g.get('id'), 'name': g.get('name'), 'models': g.get('models', [])}
                                for g in (v.get('groups') or [])],
                 })
@@ -492,41 +567,35 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {'ok': False, 'error': str(e)})
 
         if path == '/api/harness_select_model':
-            # 代理切换班次模型
+            # 代理切换班次模型（v0.8.3 同步修复鉴权与端点格式）
             import urllib.request as _ur
-            DSH = 'http://127.0.0.1:3080/api'
-            payload_model = payload.get('provider', '')
-            payload_name = payload.get('model', '')
-            def _rpc(method, pdata):
+            _DSH = 'http://127.0.0.1:3080/api'
+            def _rpc2(method, args):
                 body = json.dumps({'type': 'client-request',
-                                   'rpcId': f'{method}-{int(time.time()*1000)}',
-                                   'method': method, 'payload': pdata}).encode()
-                req = _ur.Request(f'{DSH}/{method}', data=body,
-                                  headers={'Content-Type': 'application/json'}, method='POST')
+                                   'rpcId': f'fish-{method}-{int(time.time()*1000)}',
+                                   'method': method, 'payload': {'args': args}}).encode()
+                req = _ur.Request(f'{_DSH}/{method}', data=body,
+                                   headers={'Content-Type': 'application/json',
+                                            'Cookie': _dsh_cookie(),
+                                            'Host': '127.0.0.1:3080'}, method='POST')
                 with _ur.urlopen(req, timeout=10) as r:
                     return json.loads(r.read())
             try:
-                lst = _rpc('session.list', {})
+                lst = _rpc2('session/list', {'_request': {}})
                 fish = [s for s in (lst.get('result', {}).get('value', {}).get('items') or [])
-                        if s.get('agentPreset') == 'daddyfish']
+                        if ((s.get('projections') or {}).get('values') or {}).get('agentPreset') == 'daddyfish']
                 if not fish:
                     return self._json(200, {'ok': False, 'error': 'no daddyfish session'})
+                fish.sort(key=lambda s: s.get('updatedAt', 0), reverse=True)
                 sid = fish[0]['sessionId']
-                sel_body = json.dumps({'type': 'client-request',
-                                       'rpcId': f'sel-{int(time.time()*1000)}',
-                                       'method': 'session.selectModel',
-                                       'payload': {'sessionId': sid,
-                                                   'provider': payload.get('provider', ''),
-                                                   'model': payload.get('model', '')}}).encode()
-                req = _ur.Request(f'{DSH}/session.selectModel', data=sel_body,
-                                  headers={'Content-Type': 'application/json'}, method='POST')
-                with _ur.urlopen(req, timeout=10) as r:
-                    res = json.loads(r.read())
-                ok = res.get('result', {}).get('ok') is True
+                sel = _rpc2('session/selectModel', {'request': {
+                    'sessionId': sid,
+                    'provider': payload.get('provider', ''),
+                    'model': payload.get('model', '')}})
+                ok = sel.get('result', {}).get('ok') is True
                 return self._json(200, {'ok': ok})
             except Exception as e:
                 return self._json(200, {'ok': False, 'error': str(e)})
-
         if path == '/api/standin_test_models':
             # 测试代班 API 连通性：列出该端点的模型
             cfg = _load_standin_file()

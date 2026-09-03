@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "鲸鱼娘·大肥鱼",
-  "version": "0.8.1",
+  "version": "0.8.3",
   "description": "大肥鱼在 Chrome 里的化身",
   "permissions": [
     "storage",
@@ -60,6 +60,5 @@
         "<all_urls>"
       ]
     }
-  ],
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAj9FtV1Gl2DomcP8Lad7pCIJh68bxyqFk7nljp94pENl17MZmYurU9vPLBQiKEACPGegevZyWIgYQx/cJYAQcMQasFQXEFh+pWhFZ5gaI06WQ6T3KvPpgmpme7eHsBptZMncSsdye/nYL9pFd0/GBvyKLFDd6sB63uNlQL8y9+CgP0W/apSednyNb/FxKdpkorXlRwoBm8y6bg3cyTBJUHWO31BF58PEJ4uHypeuGY7Oj6CyeEl+P2y3a9c4aoapsz1nP/EiczhipVrBJh1wEov4MjmmLFah3skYm+Jgb+fZaKdxJl7gVaXJOGmpUTnuBoji/58C4t/+kYu83BV85EQIDAQAB"
+  ]
 }

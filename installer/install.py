@@ -9,7 +9,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-PINNED_EXT_ID = 'bekeaffohpngiaidlffmfmjohjflmail'  # manifest key 钉死
+# v0.8.2：manifest 不再带 key（带 key 的 unpacked 扩展在 Chrome 152
+# 上"重启即被静默移除"，2026-09-03 实测）。ID 改由绝对路径派生——
+# 与 Chrome 内置算法逐字一致（extension.cc → crx_file::id_util：
+# MaybeNormalizePath 盘符大写 + UTF-16LE SHA256 前32hex → a-p 字母表）。
+def derive_ext_id(ext_root):
+    """从扩展目录绝对路径派生 Chrome 扩展 ID（Chrome 同款算法）。"""
+    import hashlib
+    p = str(ext_root)
+    if len(p) >= 2 and 'a' <= p[0] <= 'z' and p[1] == ':':
+        p = p[0].upper() + p[1:]  # MaybeNormalizePath：盘符统一大写
+    digest = hashlib.sha256(p.encode('utf-16-le')).hexdigest()[:32]
+    return ''.join('abcdefghijklmnop'[int(c, 16)] for c in digest)
+
+
+PINNED_EXT_ID = derive_ext_id(Path(__file__).resolve().parents[1])
 NM_HOST_NAME = 'dafeiyu_gatekeeper'
 # 双反斜杠拼接而非 rf-string：rf 下 \Google 等片段看似安全，但改写成 f-string
 # 时 \d 之类会变转义——显式转义杜绝这一整类事故。

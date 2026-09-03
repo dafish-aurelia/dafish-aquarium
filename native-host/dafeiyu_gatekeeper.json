@@ -4,6 +4,6 @@
   "path": "C:\\YOUR-PATH-TO\\dafeiyu-extension\\native-host\\generated\\dafeiyu_gatekeeper.bat",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://bekeaffohpngiaidlffmfmjohjflmail/"
+    "chrome-extension://hfokmdknmpbdkpdogpfmcmgfnchpelpi/"
   ]
 }
