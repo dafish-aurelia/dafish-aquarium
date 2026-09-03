@@ -5,3 +5,8 @@ data/
 *弃用*
 native-host/.gen/
 native-host/generated/
+.codegraph/
+# 本机私有文档/测试（依赖 workspace scripts，不随发布分发）
+docs/诊断报告-*.md
+tests/test_doorbell_ring.py
+tests/test_spawn_lock.py

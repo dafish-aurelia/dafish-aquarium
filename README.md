@@ -1,6 +1,7 @@
 # 大肥鱼的水缸 🐳
 
 > 一只住在浏览器里的蓝胖鲸：网页宠物 + 水缸新标签页 + 本地信局聊天。Chrome MV3。
+> 当前版本 **v0.8.1**（安装器 + 钉死扩展 ID + 珊瑚礁默认主页 + 首次向导 + 复活看门狗）。
 >
 > 🐳 新朋友看这里：[docs/功能介绍.md](docs/功能介绍.md) —— 她都会干什么，一页看完
 > 📘 完整的使用与测试文档（聊天链路 / 信局运维 / 已知问题清单）见 [docs/使用文档.md](docs/使用文档.md)。
@@ -47,6 +48,10 @@
 `nativeMessaging`（安装器用户）：由 Chrome 按需拉起本地看护进程，仅负责确保信局随浏览器起落；
 不装它扩展也完全可用（SW 侧 alarm 看门狗兜底）。
 
+**密钥卫生**：钉扩展 ID 的私钥 `dafeiyu_key.pem` 住在工作区 `data\keys\`（绝不进扩展目录——
+Chrome 加载时会警告"包含密钥文件"，打包分发即泄漏他人可冒发同 ID 扩展）；扩展目录里的
+`native-host\.gen\` 只留公钥存档与 ID 文本。
+
 ## 安装
 
 ### 方式一：安装器（推荐，Windows）
@@ -76,8 +81,9 @@ newtab.html|css|js      新标签页（珊瑚礁主页 + 可选外部水缸跳�
 welcome.html|css        首次运行向导（Level 0/1/2 分层引导）
 server/pet_mailbox.py   信局 v2：路由/排队/健康/代班代理（令牌鉴权）
 installer/              安装器：按用户路径生成 native-host 配置（绿色安装）
-native-host/            Native Messaging 看护（模板 + 轻量宿主；真实配置由安装器生成）
-tests/                  pytest（信局）+ node TAP（URL 净化）
+native-host/            Native Messaging 看护（模板 + 轻量宿主；真实配置由安装器生成；
+                        v0.8.1 轻量宿主带"复活看门狗"：SW 死后 alarm 失效时经 native port 反向唤起）
+tests/                  pytest（信局/看门狗/密钥卫生）+ node TAP（URL 净化）
 docs/使用文档.md         完整手册
 ```
 

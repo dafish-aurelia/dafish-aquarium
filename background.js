@@ -213,6 +213,17 @@ function connectGatekeeper() {
     _gatePort = port;
     port.onMessage.addListener((m) => {
       if (m && m.type === 'pong') console.log('[gate] 看护应答:', JSON.stringify(m));
+      // v0.8.1 复活帧：看护发现投影心跳超时（SW 死后 alarm 投递失效的现实事故）。
+      // native port 入站消息是强制事件源——收到即证明本 SW 刚被拉起或仍活着，
+      // 趁清醒把心跳、收信、看护连接一次性续上。
+      if (m && m.type === 'revive') {
+        console.log('[gate] 复活帧到达:', JSON.stringify(m));
+        try {
+          startInboxLoop();
+          postHeartbeat();
+          if (!_gatePort) connectGatekeeper();
+        } catch (e) { console.error('[gate] 复活动作失败:', e); }
+      }
     });
     port.onDisconnect.addListener(() => {
       const err = chrome.runtime.lastError;
