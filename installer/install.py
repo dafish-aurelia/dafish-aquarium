@@ -5,8 +5,10 @@
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # v0.8.2：manifest 不再带 key（带 key 的 unpacked 扩展在 Chrome 152
@@ -34,19 +36,25 @@ EXT_ROOT = Path(__file__).resolve().parents[1]
 def get_short_path(path):
     """8.3 短路径：cmd 的 %~sI 换算。取不到（含路径不存在）回退原路径。
     注意必须把整行交给 cmd（字符串形式）：列表形式会被 list2cmdline
-    加反斜杠转义内部引号，cmd 解析不了。"""
-    try:
-        r = subprocess.run(
-            f'cmd /c for %I in ("{path}") do @echo %~sI',
-            capture_output=True, text=True, timeout=10)
-        lines = [l for l in r.stdout.strip().splitlines() if l.strip()]
-        sp = lines[-1].strip() if lines else str(path)
-        # 换算失败时 cmd 原样回显（含引号或与原路径相同）→ 回退原路径
-        if sp.strip('"') == str(path) or '"' in sp:
-            return str(path)
-        return sp
-    except Exception:
-        return str(path)
+    加反斜杠转义内部引号，cmd 解析不了。
+    新建目录的短名登记有亚秒级延迟（2026-09-04 实测：pytest 刚建的
+    tmp 目录首查回显长路径，同路径手动复跑即得 PYTEST~1）——失败重试
+    一次，再不行才回退。"""
+    for attempt in (1, 2):
+        try:
+            r = subprocess.run(
+                f'cmd /c for %I in ("{path}") do @echo %~sI',
+                capture_output=True, text=True, timeout=10)
+            lines = [l for l in r.stdout.strip().splitlines() if l.strip()]
+            sp = lines[-1].strip() if lines else str(path)
+            # 换算失败时 cmd 原样回显（含引号或与原路径相同）
+            if sp.strip('"') != str(path) and '"' not in sp:
+                return sp
+        except Exception:
+            pass
+        if attempt == 1 and os.path.exists(path):
+            time.sleep(0.3)  # 给短名登记一个窗口再试一次
+    return str(path)
 
 
 def find_python():
