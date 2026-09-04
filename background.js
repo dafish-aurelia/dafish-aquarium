@@ -4,6 +4,32 @@
 const PORT_DEFAULT = 13140;
 let prevActiveTabId = null;
 
+// ---- v0.9 天气感知 ----
+const WX_GEO = 'https://geocoding-api.open-meteo.com/v1/search';
+const WX_FORECAST = 'https://api.open-meteo.com/v1/forecast';
+const WX_IPAPI = 'https://ipapi.co/json/';
+// WMO 分组内联副本（lib/weather.js 有正本，改一处必须同步另一处）
+const _WMO_POOLS = [
+  { pool: 'clear', codes: [0, 1] },
+  { pool: 'cloud', codes: [2, 3] },
+  { pool: 'fog', codes: [45, 48] },
+  { pool: 'rain', codes: [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82] },
+  { pool: 'snow', codes: [71, 73, 75, 77, 85, 86] },
+  { pool: 'storm', codes: [95, 96, 99] },
+];
+function _wmoPool(code) {
+  if (typeof code !== 'number' || Number.isNaN(code)) return 'unknown';
+  for (const g of _WMO_POOLS) if (g.codes.includes(code)) return g.pool;
+  return 'unknown';
+}
+function _wxParseGeocode(body) {
+  const r = body && body.results && body.results[0];
+  if (!r || typeof r.latitude !== 'number' || typeof r.longitude !== 'number') return null;
+  return { lat: r.latitude, lon: r.longitude };
+}
+const WX_FRESH_MS = 30 * 60e3;
+function _wxIsFresh(c) { return !!(c && typeof c.ts === 'number' && Date.now() - c.ts < WX_FRESH_MS); }
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   return tab || null;
@@ -118,6 +144,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'pet-heartbeat') postHeartbeat();
   if (alarm.name === 'pet-mood') accumulateMood();
   if (alarm.name === 'pet-gate') { try { connectGatekeeper(); } catch (e) { console.error('[gate]', e); } }
+  if (alarm.name === 'pet-weather') { wxFetch().catch(() => {}); }
 });
 
 let inboxLoopRunning = false;
@@ -204,12 +231,73 @@ async function postHeartbeat() {
     }
   } catch (e) { /* 信局不在家：静默，等下个 alarm 再试 */ }
 }
+
+// ---- v0.9 天气拉取管线（拉取只在 SW，视图层只读 storage 缓存）----
+
+// 城市名 → 经纬度（缓存 1 天于 storage.weather_geo）；失败返回 null
+async function wxResolveCity(city) {
+  const { weather_geo } = await chrome.storage.local.get('weather_geo');
+  if (weather_geo && weather_geo.city === city && Date.now() - weather_geo.ts < 86400e3) {
+    return { lat: weather_geo.lat, lon: weather_geo.lon };
+  }
+  try {
+    const r = await fetch(`${WX_GEO}?name=${encodeURIComponent(city)}&count=1&language=zh`);
+    const g = _wxParseGeocode(await r.json());
+    if (!g) return null;
+    await chrome.storage.local.set({ weather_geo: { city, lat: g.lat, lon: g.lon, ts: Date.now() } });
+    return g;
+  } catch (e) { return null; }
+}
+
+// 经纬度 → 天气快照 { code, temp, precip, city, ts, stale }；失败用旧缓存并标 stale
+async function wxFetch() {
+  const { weather_city = '' } = await chrome.storage.local.get('weather_city');
+  if (!weather_city) return;
+  const { weather_cache: old } = await chrome.storage.local.get('weather_cache');
+  const geo = await wxResolveCity(weather_city);
+  if (!geo) {
+    if (old) chrome.storage.local.set({ weather_cache: { ...old, stale: true } });
+    return;
+  }
+  try {
+    const r = await fetch(`${WX_FORECAST}?latitude=${geo.lat}&longitude=${geo.lon}` +
+      `&current=temperature_2m,weather_code&daily=precipitation_probability_max&forecast_days=1&timezone=auto`);
+    const d = await r.json();
+    const wx = {
+      code: d.current.weather_code,
+      temp: d.current.temperature_2m,
+      precip: (d.daily.precipitation_probability_max || [0])[0],
+      city: weather_city,
+      ts: Date.now(),
+      stale: false,
+    };
+    await chrome.storage.local.set({ weather_cache: wx });
+    // 雨晴切换播报：上一份缓存已过期（跨两轮拉取）且池名翻转（雨↔非雨）时，
+    // 经信局 inject 广播一帧 weather_shift——她说什么由 behavior 层现场生成
+    if (old && !_wxIsFresh(old) && typeof old.code === 'number' && old.code !== wx.code) {
+      const aPool = _wmoPool(old.code), bPool = _wmoPool(wx.code);
+      if ((aPool === 'rain') !== (bPool === 'rain')) {
+        try {
+          await mbJson('/api/inject', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'weather_shift', text: '', from: aPool, to: bPool }),
+          });
+        } catch (e) { /* 信局不在就跳过播报，不是错 */ }
+      }
+    }
+  } catch (e) {
+    if (old) chrome.storage.local.set({ weather_cache: { ...old, stale: true } });
+  }
+}
+
 chrome.alarms.create('pet-heartbeat', { periodInMinutes: 1 }); // 兜底：老安装没有该闹钟也补上
 chrome.alarms.create('pet-poll', { periodInMinutes: 1 });      // 同上：收信看门狗一并补挂
 chrome.alarms.create('pet-mood', { periodInMinutes: 1 });      // v0.7 摸鱼指数累积
 chrome.alarms.create('pet-gate', { periodInMinutes: 0.5 });    // v0.7.2 门卫断线看门狗
+chrome.alarms.create('pet-weather', { periodInMinutes: 30 });  // v0.9 天气缓存
 accumulateMood();
 postHeartbeat();
+wxFetch().catch(() => {}); // v0.9 冷启动别等 30 分钟
 // ---- v0.7.2 门卫（Native Messaging 寄生）----
 // 后勤看护住在 Chrome 里：SW 冷启动即 connectNative 拉起看护进程，
 // 看护负责确保信局+门铃在岗。SW 活跃期间（inboxLoop 长轮询）连接保持；
@@ -380,6 +468,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(msg.payload),
             }));
+          } catch (e) { sendResponse({ ok: false }); }
+          break;
+        }
+        case 'WEATHER_IP_DETECT': {
+          // settings 页"猜城市"按钮：SW 代拉 ipapi（页面侧无 host 权限）
+          try {
+            const r = await fetch(WX_IPAPI);
+            const d = await r.json();
+            sendResponse({ ok: true, city: d.city || '', ip: d.ip || '' });
           } catch (e) { sendResponse({ ok: false }); }
           break;
         }
