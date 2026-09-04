@@ -39,8 +39,8 @@ def test_connect_gatekeeper_called_at_top_level():
 
 
 def test_manifest_version_bumped():
-    """v0.8.3 版本号。"""
+    """v0.9.0 版本号。"""
     import json
     man = json.loads((Path(__file__).resolve().parents[1] / 'manifest.json')
                      .read_text(encoding='utf-8'))
-    assert man['version'] == '0.8.3'
+    assert man['version'] == '0.9.0'
