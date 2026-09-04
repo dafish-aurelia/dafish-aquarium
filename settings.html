@@ -49,7 +49,7 @@
       font-weight: 600;
       cursor: pointer;
     }
-    #state, #home-state { display: block; margin-top: 10px; font-size: 12px; color: #56789a; min-height: 18px; text-align: center; }
+    #state, #home-state, #wx-state { display: block; margin-top: 10px; font-size: 12px; color: #56789a; min-height: 18px; text-align: center; }
     .ok { color: #178a50; }
     select {
       appearance: auto;
@@ -75,6 +75,22 @@
     <div class="row"><label for="home-url">主页地址</label><input id="home-url" type="url" placeholder="file:///D:/my-tank/start.html"></div>
     <button id="save-home">💾 保存主页</button>
     <span id="home-state"></span>
+    <h2>🌤️ 天气与语音</h2>
+    <p class="tip">
+      填一个城市名，本鱼就能聊天气（数据来自 Open-Meteo 公共接口，只发城市名、不带任何身份信息）。
+      声音用的是系统自带语音，默认关闭。
+    </p>
+    <div class="row"><label for="wx-city">城市</label><input id="wx-city" type="text" placeholder="上海 / 杭州 / 成都…"></div>
+    <div style="display:flex;gap:8px">
+      <button id="wx-detect" style="margin-top:8px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);font-size:13px">📍 IP 自动检测</button>
+      <button id="wx-save" style="margin-top:8px;flex:1">💾 保存城市</button>
+    </div>
+    <span id="wx-state"></span>
+    <div class="row" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input id="tts-toggle" type="checkbox" style="width:auto"> 🔊 让她开口说话（气泡台词朗读）
+      </label>
+    </div>
     <h2>🎣 代班 API</h2>
     <div class="row"><label for="k">API Key</label><input id="k" type="password" autocomplete="off" placeholder="留空 = 不修改已保存的钥匙"></div>
     <div class="row"><label for="u">Base URL</label><input id="u" type="text" placeholder="https://api.siliconflow.cn/v1"></div>
