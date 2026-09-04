@@ -37,6 +37,13 @@
       '唔唔……主人，都几点了，该睡觉了啦…',
       '本鱼把咸鱼干叼来了，吃完就睡，不许熬夜。'
     ],
+    novel: [
+      '书页翻动的声音本鱼最喜欢，像小浪花。',
+      '追文的时候主人会忘记喝水的，本鱼盯着呢。',
+      '（凑近）这一章……到关键剧情了吗？',
+      '看小说的人自带结界，本鱼游过去也没被发现。',
+      '主人看文时表情一直在变，比剧还好看。',
+    ],
     video_tpl: [
       '《{title}》！本鱼也一起看～',
       '这部《{title}》看起来很有料的样子。',
@@ -64,7 +71,13 @@
     '游累了吗主人？本鱼可以陪你发呆。',
     '听说双击会有好事发生……骗你的，是单击。',
     '本鱼的思维链好长啊……算了不想了。',
-    '今天也在认真待机中，请放心摸鱼。'
+    '今天也在认真待机中，请放心摸鱼。',
+    '（数泡泡）第三个泡泡有点歪。',
+    '缸壁上的倒影也是一条鱼，那是本鱼的室友。',
+    '要是能把"稍后再看"里的东西都看完……不，算了。',
+    '主人的光标轨迹，其实是一条小河。',
+    '本鱼在心里养了一盆海草，长势不错。',
+    '刚才游到一半忘了要去哪……就当是散步吧。',
   ];
   const QUIPS = BUNDLED_QUIPS;
   const HEARTS = BUNDLED_HEARTS;
@@ -96,12 +109,77 @@
 
   function pick(arr) { return arr.length ? arr[Math.floor(Math.random() * arr.length)] : ''; }
 
-  // 场景感知台词：70% 说应景的话（工作/看剧/摸鱼），30% 用通用池
-  // （审查二轮P2：词料已内置为常量对象，删除数组分支死代码）
+  // ---- 反重复：最近说过的不再说，池子见底才解冻 ----
+  // 语录最大的破功不是内容老，是"同一句五分钟前来过"。每个池独立记忆，
+  // 冻结数 = min(池长-1, 3)：池 5 条冻 3、池 20+ 条也只冻 3，轻量防复读。
+  const _recent = {};
+  function pickFresh(poolKey, arr) {
+    if (!arr || !arr.length) return '';
+    const frozen = Math.min(arr.length - 1, 3);
+    const seen = (_recent[poolKey] = _recent[poolKey] || []);
+    let line = '';
+    for (let i = 0; i < 6; i++) { // 最多试 6 次，全撞就放弃（比死循环优雅）
+      line = pick(arr);
+      if (!seen.includes(line)) break;
+    }
+    seen.push(line);
+    if (seen.length > frozen) seen.shift();
+    return line;
+  }
+
+  // ---- 时段语料：深夜/清晨/午后/傍晚 各给一小撮应景话 ----
+  // 不新建触发器：只在挑词时混入，自然低频出现，不吵。
+  function daySlot() {
+    const h = new Date().getHours();
+    if (h >= 23 || h < 5) return 'night';
+    if (h < 9) return 'early';
+    if (h < 14) return 'noon';
+    if (h < 19) return 'dusk';
+    return 'evening';
+  }
+  const SLOT_QUIPS = {
+    night: [
+      '都这个点了……本鱼的生物钟是鲸鱼型的，主人是什么型的？',
+      '深夜的浏览器好安静，只听得见本鱼吐泡泡。',
+      '主人再刷一会儿，本鱼就一个人把夜班游完。',
+      '（小声）要不要赌明早的闹钟能不能叫醒你？',
+    ],
+    early: [
+      '早起的鲸鱼有白米饭吃……主人起了吗？',
+      '清晨第一缕光进缸里啦，今天也要慢慢游。',
+      '（伸懒腰）新的一天，从巡一遍珊瑚礁开始。',
+    ],
+    noon: [
+      '午间的水温最舒服，适合犯困……主人也是吗？',
+      '吃饱了的下午容易摸鱼，本鱼可以作证。',
+      '（晒着缸里的太阳）就眯五分钟，五分钟。',
+    ],
+    dusk: [
+      '傍晚啦，今天的工作指标完成得怎么样呀？',
+      '夕阳把缸照成金色的时间，本鱼最喜欢。',
+      '这个点适合把没看完的剧捡起来哦。',
+    ],
+    evening: [
+      '晚上的水缸有灯，游起来影子会变大。',
+      '（趴缸边）主人在忙什么？本鱼听着呢。',
+    ],
+  };
+
+  // 场景感知台词：55% 应景场景、20% 时段、25% 通用兜底
+  // （v0.8.5：场景概率降 0.7→0.55，让时段语料有机会露脸；novel 池补齐）
   function pickQuip() {
-    const scene = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
-    const pool = (QUIPS[scene] || []).length && Math.random() < 0.7 ? QUIPS[scene] : QUIPS.generic;
-    return pick(pool) || '咕噜噜……';
+    const r = Math.random();
+    const slot = SLOT_QUIPS[daySlot()] || [];
+    let line = '';
+    if (r < 0.55) {
+      const scene = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
+      const pool = QUIPS[scene] && QUIPS[scene].length ? QUIPS[scene] : QUIPS.generic;
+      line = pickFresh(scene, pool);
+    } else if (r < 0.75 && slot.length) {
+      line = pickFresh('slot:' + daySlot(), slot);
+    }
+    if (!line) line = pickFresh('generic', QUIPS.generic);
+    return line || '咕噜噜……';
   }
 
   // 心情徽章跟随场景刷新（☀️摸鱼 💼工作 🍿看剧 🏠在家）
@@ -523,7 +601,7 @@ document.addEventListener('pointermove', (e) => {
     const now = Date.now();
     if (now - lastHeart < 3 * 60e3) return;
     lastHeart = now;
-    V.showHeart('（' + pick(HEARTS) + '）', 5200);
+    V.showHeart('（' + pickFresh('hearts', HEARTS) + '）', 5200);
   }, 4 * 60e3);
 
   // ---- 电量彩蛋（一次性）----
@@ -558,7 +636,7 @@ document.addEventListener('pointermove', (e) => {
       V.showBubble(pick(['主人不理本鱼，本鱼决定自己玩。', '（趴在缸底假装珊瑚）']), 4200);
       setTimeout(() => { if (V.W.state === 'IDLE') V.setSprite('front.png', false); }, 5000);
     } else {
-      V.showHeart('（' + pick(SOLO_LINES) + '）', 4500);
+      V.showHeart('（' + pickFresh('solo', SOLO_LINES) + '）', 4500);
     }
   }, 60e3);
 
