@@ -1,16 +1,20 @@
 {
   "manifest_version": 3,
   "name": "鲸鱼娘·大肥鱼",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "description": "大肥鱼在 Chrome 里的化身",
   "permissions": [
     "storage",
     "alarms",
     "tabs",
-    "nativeMessaging"
+    "nativeMessaging",
+    "tts"
   ],
   "host_permissions": [
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://api.open-meteo.com/*",
+    "https://ipapi.co/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -39,6 +43,7 @@
       ],
       "js": [
         "lib/url_sanitize.js",
+        "lib/weather.js",
         "mailbox/client.js",
         "senses/generic.js",
         "pet/renderer.js",
