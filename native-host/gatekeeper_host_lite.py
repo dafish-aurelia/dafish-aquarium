@@ -23,6 +23,10 @@ from pathlib import Path
 EXT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAILBOX = os.path.join(EXT_ROOT, 'server', 'pet_mailbox.py')
 TOKEN_URL = 'http://127.0.0.1:13140/api/token'
+# venv 优先：门铃要 yaml 签 DSH cookie，系统 python 常没有（2026-09-04 事故：
+# py -3 探到 PC_Lua 3.14 无 yaml → 门铃全程 401 → 当日班次不建、铃不响）。
+_WS = os.path.dirname(os.path.dirname(EXT_ROOT))
+VENV_PY = os.path.join(_WS, '.venv', 'Scripts', 'python.exe')
 # 与 pet_mailbox.py 的 BASE_DIR 完全同一约定：BASE_DIR = parents[3]/data/pet-mailbox。
 # 本文件（native-host/）与 pet_mailbox.py（server/）在仓库约定里同深，
 # parents[3] 指向同一家 data 目录。v0.8.1 事故：曾按 EXT_ROOT+一个 pardir
@@ -55,6 +59,13 @@ def _send_message(obj):
     _PROTO.buffer.flush()
 
 
+def _spawn_python():
+    """拉服务用的解释器：优先工作区 .venv（有 yaml），否则退回自身。"""
+    if os.path.exists(VENV_PY):
+        return VENV_PY
+    return sys.executable
+
+
 def _mailbox_alive():
     import urllib.request
     try:
@@ -68,7 +79,7 @@ def _ensure_mailbox():
     if _mailbox_alive():
         _ensure_doorbell()  # 信局在岗才管门铃（门铃依赖信局收信）
         return
-    subprocess.Popen([sys.executable, MAILBOX],
+    subprocess.Popen([_spawn_python(), MAILBOX],
                      creationflags=0x08000000,  # NO_WINDOW
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     _ensure_doorbell()
@@ -103,7 +114,7 @@ def _ensure_doorbell():
         log_path = os.path.join(os.path.dirname(HEARTBEAT_FILE), 'doorbell-live.log')
         log = open(log_path, 'ab', buffering=1)
         log.write(f'\n==== gatekeeper launch {time.strftime("%m-%d %H:%M:%S")} ====\n'.encode())
-        subprocess.Popen([sys.executable, doorbell],
+        subprocess.Popen([_spawn_python(), doorbell],
                          creationflags=0x01000000 | 0x08000000,  # BREAKAWAY | NO_WINDOW
                          stdout=log, stderr=subprocess.STDOUT)
     except Exception as e:  # noqa: BLE001
