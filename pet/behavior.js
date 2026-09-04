@@ -165,18 +165,27 @@
     ],
   };
 
-  // 场景感知台词：55% 应景场景、20% 时段、25% 通用兜底
-  // （v0.8.5：场景概率降 0.7→0.55，让时段语料有机会露脸；novel 池补齐）
+  // 场景感知台词：45% 应景场景、20% 时段、15% 天气、20% 通用兜底
+  // （v0.9：天气入列；天气未知时配额自动回落通用——离线零降级感）
   function pickQuip() {
     const r = Math.random();
     const slot = SLOT_QUIPS[daySlot()] || [];
     let line = '';
-    if (r < 0.55) {
+    if (r < 0.45) {
       const scene = window.DafeiyuSenses ? window.DafeiyuSenses.scene() : 'chill';
       const pool = QUIPS[scene] && QUIPS[scene].length ? QUIPS[scene] : QUIPS.generic;
       line = pickFresh(scene, pool);
-    } else if (r < 0.75 && slot.length) {
+    } else if (r < 0.65 && slot.length) {
       line = pickFresh('slot:' + daySlot(), slot);
+    } else if (r < 0.80) {
+      // 天气配额只吃新鲜数据：stale 旧缓存整个分支跳过（含 advisory），回落通用
+      const wx = window.DafeiyuSenses && window.DafeiyuSenses.weather();
+      const W = window.DafeiyuWeather;
+      if (wx && !wx.stale && W) {
+        const adv = W.advisoryPool(wx);  // 提醒池优先（带伞/高温/严寒）
+        const pool = adv || W.WEATHER_QUIPS[W.wmoToPool(wx.code)];
+        line = pickFresh('weather:' + (adv ? 'adv' : W.wmoToPool(wx.code)), pool);
+      }
     }
     if (!line) line = pickFresh('generic', QUIPS.generic);
     return line || '咕噜噜……';
@@ -569,6 +578,13 @@ document.addEventListener('pointermove', (e) => {
       lastDeep = Date.now();
       V.showBubble(msg.text, 6000);
       chatAppendIfOpen('代班小鱼', msg.text);
+    } else if (msg.kind === 'weather_shift') {
+      // v0.9 雨晴切换播报（background 经信局广播，from/to 为池名）：
+      // 说辞现场生成——to=rain 按"要下雨"，其余按"雨停/天气变了"
+      const pools = (msg.to === 'rain')
+        ? ['要下雨了的样子，本鱼先把伞挂门口。', '云压过来了，雨可能在路上——出门带伞哦。']
+        : ['雨停啦，太阳回来了！', '天晴了，主人晾心情的好时候。'];
+      V.showBubble(pickFresh('wxshift', pools), 5000);
     }
   });
 

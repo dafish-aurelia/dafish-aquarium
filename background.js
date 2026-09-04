@@ -155,6 +155,8 @@ let inboxLoopRunning = false;
 let _lastRequeueAt = 0;
 async function deliverToTabs(m) {
   const msg = { type: 'PET_MESSAGE', kind: m.type, text: m.text || '' };
+  if (m.from !== undefined) msg.from = m.from; // v0.9 weather_shift：池名透传给切换播报
+  if (m.to !== undefined) msg.to = m.to;
   const tabs = await chrome.tabs.query({});
   let delivered = 0;
   for (const t of tabs) {
