@@ -42,8 +42,9 @@
         "<all_urls>"
       ],
       "js": [
-        "lib/url_sanitize.js",
-        "lib/weather.js",
+    "lib/url_sanitize.js",
+    "lib/weather.js",
+    "lib/voice.js",
         "mailbox/client.js",
         "senses/generic.js",
         "pet/renderer.js",
