@@ -196,6 +196,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;  /* 模型行：标签+下拉放不下时换行，不再把面板顶宽 */
 }
 .dafeiyu-settings select,
 .dafeiyu-settings input {
@@ -205,13 +206,32 @@
   outline: none;
   background: #fff;
   color: #0a3555;
+  min-width: 0;  /* flex 子项允许收缩，防长内容（模型名）撑破行 */
 }
 .dafeiyu-settings input[type="password"],
 .dafeiyu-settings input[type="text"] { width: 100%; }
 .dafeiyu-settings .dy-sep { height: 1px; background: rgba(90, 160, 220, 0.35); margin: 4px 0; }
 .dafeiyu-settings .dy-sub { font-weight: bold; color: #2b7fc4; font-size: 12px; }
-.dafeiyu-settings .dy-actions { display: flex; align-items: center; gap: 8px; }
+.dafeiyu-settings .dy-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dafeiyu-settings .dy-cfgstate { font-size: 11px; color: #56789a; }
+/* 模型下拉防溢出：select 原生按最长选项撑宽（如 "sensenova-6.8-flash-lite（商汤）"），
+   会把 300px 面板顶破。钉死 100% 行宽 + 选项文本不换行由下拉浮层自己滚动，
+   收起后只显示截断值（title 属性由 JS 填全名）。 */
+.dafeiyu-settings select.dy-model {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dafeiyu-settings select.dy-model option,
+.dafeiyu-settings select.dy-model optgroup {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dafeiyu-settings .dy-row { flex-wrap: wrap; }
 
 .dy-feed-title { font-weight: bold; }
 .dy-head {

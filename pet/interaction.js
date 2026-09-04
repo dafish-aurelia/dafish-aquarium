@@ -297,6 +297,8 @@
         }
         modelState.textContent = '当前: ' + res.current.model;
       }
+      // 收起后是截断文本，悬停给全名（CSS ellipsis 的配套）
+      modelSel.title = modelSel.selectedOptions[0]?.textContent || '';
     } catch (e) {
       modelSel.innerHTML = '<option value="">不可用</option>';
       modelState.textContent = '⚠ ' + friendlyErr(e);
@@ -304,6 +306,10 @@
   }
 
   settingsPanel.querySelector('.dy-refresh-model').addEventListener('click', loadModels);
+  // 用户换了选择也同步悬停全名（与加载后的 title 行为一致）
+  modelSel.addEventListener('change', () => {
+    modelSel.title = modelSel.selectedOptions[0]?.textContent || '';
+  });
 
   settingsPanel.querySelector('.dy-apply-model').addEventListener('click', async () => {
     if (!modelSel.value) { modelState.textContent = '⚠ 请先选模型'; return; }
