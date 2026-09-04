@@ -129,15 +129,30 @@ def _heartbeat_stale_s():
         return 0.0
 
 
+def _revive_watchdog_once():
+    """看门狗单轮逻辑（独立函数以便测试）：补拉死信局 + 投影心跳超时发 revive 帧。"""
+    if not _mailbox_alive():
+        print('[watchdog] 信局不在岗，看门狗直接补拉', file=sys.stderr)
+        subprocess.Popen([_spawn_python(), MAILBOX],
+                         creationflags=0x08000000,  # NO_WINDOW
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _ensure_doorbell()  # 门铃依赖信局，一并补位
+    if _heartbeat_stale_s() > PROJECTION_STALE_S:
+        _send_message({'type': 'revive', 'reason': 'projection-heartbeat-stale',
+                       'staleS': int(_heartbeat_stale_s())})
+
+
 def _revive_watchdog(stop_event):
-    """复活看门狗：投影心跳超时 → 往 Chrome 写一帧 revive。
-    写帧动作本身就是事件源，Chrome 必须拉起（或已活着的）SW 来接收。
-    SW 端 background.js 的 port.onMessage 收到后走一次完整自检。"""
+    """复活看门狗（v0.8.4 双职责）：
+    1. 投影心跳超时 → 往 Chrome 写一帧 revive，把（可能睡着的）SW 叫醒。
+       写帧动作本身就是事件源，Chrome 必须拉起（或已活着的）SW 来接收。
+    2. 信局探活：SW 睡着时没人发 pulse，main 循环的 _ensure_mailbox 永远
+       不跑（2026-09-04 实测空窗：杀掉信局后看护干等 6 分钟没人补）。
+       看门狗是看护身上唯一独立于 Chrome 的循环——它来兜底直接拉。
+       拉起 venv 信局（_spawn_python）→ 信局活了投影心跳才有意义。"""
     while not stop_event.wait(60):
         try:
-            if _heartbeat_stale_s() > PROJECTION_STALE_S:
-                _send_message({'type': 'revive', 'reason': 'projection-heartbeat-stale',
-                               'staleS': int(_heartbeat_stale_s())})
+            _revive_watchdog_once()
         except Exception as e:  # noqa: BLE001
             print(f'[host-lite] revive watchdog 出错: {e}', file=sys.stderr)
 
