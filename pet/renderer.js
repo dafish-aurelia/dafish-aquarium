@@ -87,7 +87,9 @@
       if (emo) DafeiyuView.setEmotion(emo, ms);
       bubble.classList.remove('dafeiyu-heart');
       bubble.textContent = text;
-      if (typeof window.DafeiyuVoice !== 'undefined' && text) window.DafeiyuVoice.speak(text);
+      // 仅"可见的鱼"发声：广播会打到所有 Tab，N 个 Tab 同时念一遍是灾难
+      // （气泡 DOM 本就有 active 门控，TTS 必须同样过这道门）
+      if (typeof window.DafeiyuVoice !== 'undefined' && text && S.enabled && S.active) window.DafeiyuVoice.speak(text);
       bubble.style.display = 'block';
       clearTimeout(bubble._t);
       bubble._t = setTimeout(() => { bubble.style.display = 'none'; }, ms);
@@ -156,9 +158,11 @@
     speak(text) {
       const D = window.DafeiyuVoiceRules;
       if (!D || !D.shouldSpeak({ enabled: _voiceCfg.enabled }, 'chrome')) return;
+      // chrome.tts 不在内容脚本可用 API 白名单里 → 经 background SW 中继发声。
+      // （同时天然解决多标签页重复说话：见 showBubble 出口的 active 门控。）
       try {
-        chrome.tts.speak(String(text || ''), { lang: 'zh-CN', rate: 1.05, pitch: 1.1 });
-      } catch (e) { /* 系统无声源：静默失效 */ }
+        chrome.runtime.sendMessage({ type: 'TTS_SPEAK', text: String(text || '') });
+      } catch (e) { /* 扩展上下文重载中：静默失效 */ }
     },
   };
 

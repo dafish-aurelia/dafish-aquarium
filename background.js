@@ -482,6 +482,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           } catch (e) { sendResponse({ ok: false }); }
           break;
         }
+        case 'TTS_SPEAK': {
+          // v0.9 TTS 中继：chrome.tts 不在内容脚本 API 白名单，由 SW 代为发声。
+          // 调用方（renderer showBubble）已过 enabled+active 双门控，这里不重复判断。
+          try {
+            chrome.tts.speak(String(msg.text || ''), { lang: 'zh-CN', rate: 1.05, pitch: 1.1 });
+          } catch (e) { /* 系统无声源：静默失效 */ }
+          sendResponse({ ok: true });
+          break;
+        }
         default:
           sendResponse({ ok: false, error: 'unknown type' });
       }

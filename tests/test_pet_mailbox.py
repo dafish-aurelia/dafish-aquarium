@@ -19,6 +19,10 @@ _spec.loader.exec_module(pm)
 @pytest.fixture()
 def base(tmp_path, monkeypatch):
     monkeypatch.setattr(pm, 'BASE_DIR', tmp_path)
+    # 回环测试不得被代理劫持：宿主机开着系统代理（env+注册表双源）时，
+    # urllib 会把 127.0.0.1 请求送进代理 → 404 误报（2026-09-05 实测踩过）。
+    # no_proxy='*' 对 env 与注册表两种来源都生效。
+    monkeypatch.setenv('no_proxy', '*')
     srv = pm.ThreadingHTTPServer(('127.0.0.1', 0), pm.Handler)
     th = threading.Thread(target=srv.serve_forever, daemon=True)
     th.start()
