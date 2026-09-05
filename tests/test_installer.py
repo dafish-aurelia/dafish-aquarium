@@ -40,8 +40,8 @@ def test_bat_is_ascii_crlf(tmp_path):
     bat = ins.render_bat(str(tmp_path / 'venv' / 'python.exe'),
                          str(tmp_path / 'gatekeeper_host.py'))
     # 不得残留作者机器路径（注意：用户自己的仓库可以在任意盘，
-    # 含 G 盘；防回归目标是作者的 G:\life\Aurelia... 根，短路径化后
-    # 前缀 G:\life 仍保留，故此检测在短路径下依然有效）
+    # 临时目录可能落在本机任意盘符（含 G:）；防回归目标是作者机器的
+    # 工作区根路径（短路径化后前缀仍保留），断言里只写字面量片段）
     assert 'G:\\life' not in bat and 'G:/life' not in bat
     assert bat.isascii()
     assert '\r\n' in bat

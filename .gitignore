@@ -10,3 +10,5 @@ native-host/generated/
 docs/诊断报告-*.md
 tests/test_doorbell_ring.py
 tests/test_spawn_lock.py
+docs/superpowers/plans/
+docs/superpowers/specs/
