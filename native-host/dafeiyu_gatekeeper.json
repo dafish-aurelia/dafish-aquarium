@@ -4,6 +4,7 @@
   "path": "C:\\YOUR-PATH-TO\\dafeiyu-extension\\native-host\\generated\\dafeiyu_gatekeeper.bat",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://hfokmdknmpbdkpdogpfmcmgfnchpelpi/"
-  ]
+    "chrome-extension://<你的扩展ID>/"
+  ],
+  "_comment": "模板：真实配置由 installer/install.py 生成到 native-host/generated/（按你加载扩展后的实际 ID 填充 origins）"
 }
