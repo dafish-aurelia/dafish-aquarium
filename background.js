@@ -7,7 +7,7 @@ let prevActiveTabId = null;
 // ---- v0.9 天气感知 ----
 const WX_GEO = 'https://geocoding-api.open-meteo.com/v1/search';
 const WX_FORECAST = 'https://api.open-meteo.com/v1/forecast';
-const WX_IPAPI = 'https://ipapi.co/json/';
+const WX_IPAPI = 'http://ip-api.com/json/?lang=zh-CN';
 // WMO 分组内联副本（lib/weather.js 有正本，改一处必须同步另一处）
 const _WMO_POOLS = [
   { pool: 'clear', codes: [0, 1] },
@@ -486,11 +486,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
         case 'WEATHER_IP_DETECT': {
-          // settings 页"猜城市"按钮：SW 代拉 ipapi（页面侧无 host 权限）
+          // settings 页"猜城市"按钮：SW 代拉 ip-api（页面侧无 host 权限）。
+          // ipapi.co 在部分网络（含本机）完全不通，ip-api.com http 免 key 实测可用；
+          // 检测的是代理出口城市，settings 页文案已提示。
           try {
             const r = await fetch(WX_IPAPI);
             const d = await r.json();
-            sendResponse({ ok: true, city: d.city || '', ip: d.ip || '' });
+            const city = (d.status === 'success' && d.city) ? d.city : '';
+            sendResponse({ ok: !!city, city, ip: d.query || '' });
           } catch (e) { sendResponse({ ok: false }); }
           break;
         }

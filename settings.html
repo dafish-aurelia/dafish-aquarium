@@ -82,8 +82,9 @@
     </p>
     <div class="row"><label for="wx-city">城市</label><input id="wx-city" type="text" placeholder="上海 / 杭州 / 成都…"></div>
     <div style="display:flex;gap:8px">
-      <button id="wx-detect" style="margin-top:8px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);font-size:13px">📍 IP 自动检测</button>
-      <button id="wx-save" style="margin-top:8px;flex:1">💾 保存城市</button>
+      <!-- width:auto 压过全局 button{width:100%}：否则 detect 独占、save 被挤成竖排字 -->
+      <button id="wx-detect" style="margin-top:8px;width:auto;flex:1;background:linear-gradient(135deg,#38bdf8,#0ea5e9);font-size:13px">📍 IP 自动检测</button>
+      <button id="wx-save" style="margin-top:8px;width:auto;flex:1">💾 保存城市</button>
     </div>
     <span id="wx-state"></span>
     <div class="row" style="margin-top:10px">
