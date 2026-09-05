@@ -252,7 +252,19 @@ async function wxResolveCity(city) {
 }
 
 // 经纬度 → 天气快照 { code, temp, precip, city, ts, stale }；失败用旧缓存并标 stale
+// 单飞锁：30min alarm 与 SW 冷启动顶层调用可能并发进入，双飞会交叉写
+// weather_cache 并重复广播 rain-shift——重入直接放弃（下个闹钟会再拉）。
+let _wxBusy = false;
 async function wxFetch() {
+  if (_wxBusy) return;
+  _wxBusy = true;
+  try {
+    await _wxFetchInner();
+  } finally {
+    _wxBusy = false;
+  }
+}
+async function _wxFetchInner() {
   const { weather_city = '' } = await chrome.storage.local.get('weather_city');
   if (!weather_city) return;
   const { weather_cache: old } = await chrome.storage.local.get('weather_cache');
