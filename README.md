@@ -1,7 +1,7 @@
 # 大肥鱼的水缸 🐳
 
 > 一只住在浏览器里的蓝胖鲸：网页宠物 + 水缸新标签页 + 本地信局聊天。Chrome MV3。
-> 当前版本 **v0.8.3**（重启存活手术：清除旧 ID 冲突记录 + onStartup 冷启动保险 + 顶层看护直连）。
+> 当前版本 **v0.9.0**（天气感知 + TTS 开口说话：Open-Meteo 城市天气、雨晴切换播报、系统语音默认关）。
 >
 > 🐳 新朋友看这里：[docs/功能介绍.md](docs/功能介绍.md) —— 她都会干什么，一页看完
 > 📘 完整的使用与测试文档（聊天链路 / 信局运维 / 已知问题清单）见 [docs/使用文档.md](docs/使用文档.md)。
@@ -75,10 +75,13 @@ Chrome 加载时会警告"包含密钥文件"，打包分发即泄漏他人可�
 ```
 manifest.json           MV3 清单
 lib/url_sanitize.js     URL 脱敏 + 水缸主页唯一事实源
-senses/generic.js       场景感知（work/video/novel/home）
-pet/renderer.js         #dafeiyu-root 构建 + 表情动作 API（dy-build 版本标记）
-pet/behavior.js         散步/跟随/瞌睡/台词（内置词料）/信件派发/browser_event
-pet/interaction.js      拖拽/摸头/投喂台/模式菜单/聊天面板
+lib/weather.js          天气感知纯函数（WMO 分组/台词池/缓存新鲜度）
+lib/voice.js            TTS 决策纯函数（开关 × provider）
+senses/generic.js       场景感知（work/video/novel/home/weather 只读视图）
+pet/renderer.js         #dafeiyu-root 构建 + 表情动作 API（dy-build 版本标记）+ DafeiyuVoice
+pet/behavior.js         散步/跟随/瞌睡/台词（内置词料/天气配额）/信件派发/browser_event
+pet/interaction.js      拖拽/摸头/投喂台/模式菜单/聊天面板/⚙️ 设置（含 TTS 开关）
+js/settings_page.js     扩展设置页逻辑（水缸主页/天气城市/代班 API）
 mailbox/client.js       runtime 信箱客户端（页面零 fetch）
 newtab.html|css|js      新标签页（珊瑚礁主页 + 可选外部水缸跳转）
 welcome.html|css        首次运行向导（Level 0/1/2 分层引导）
