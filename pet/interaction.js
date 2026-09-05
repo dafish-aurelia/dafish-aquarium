@@ -198,6 +198,7 @@
     '<label class="dy-row">尺寸：' +
       '<select class="dy-size"><option value="0.8">小</option><option value="1">标准</option><option value="1.3">大</option></select></label>' +
     '<label class="dy-row">上下文保留：<input type="number" class="dy-ctxkeep" min="4" max="40" step="2" style="width:64px"> 条</label>' +
+    '<label class="dy-row">🔊 开口说话：<input type="checkbox" class="dy-tts"></label>' +
     '<div class="dy-sep"></div>' +
     '<div class="dy-sub">🧠 本体模型（Harness 会话）</div>' +
     '<label class="dy-row">模型：<select class="dy-model"><option value="">加载中…</option></select></label>' +
@@ -255,6 +256,14 @@
   settingsPanel.querySelector('.dy-size').addEventListener('change', async (e) => {
     await chrome.storage.local.set({ pet_scale: Number(e.target.value) || 1 }); // onChanged 驱动 setScale
   });
+
+  const ttsBox = settingsPanel.querySelector('.dy-tts');
+  chrome.storage.local.get('tts_enabled').then(({ tts_enabled }) => { ttsBox.checked = tts_enabled === true; }).catch(() => {});
+  ttsBox.addEventListener('change', async () => {
+    await chrome.storage.local.set({ tts_enabled: ttsBox.checked });
+    if (ttsBox.checked) V.showBubble('（清嗓）测试一下声音……主人能听见本鱼吗？');
+  });
+
   settingsPanel.querySelector('.dy-close').addEventListener('click', () => { settingsPanel.style.display = 'none'; });
   settingsPanel.querySelector('.dy-open-key').addEventListener('click', () => {
     window.DafeiyuMailbox.openStandinSettings();

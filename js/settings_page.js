@@ -22,6 +22,38 @@
     $('#home-state').className = 'ok';
   });
 
+  // 天气城市 + TTS 开关（v0.9，纯 chrome.storage，信局不在也能配）
+  const $wx = (s) => document.querySelector(s);
+  chrome.storage.local.get(['weather_city', 'tts_enabled']).then(({ weather_city, tts_enabled }) => {
+    $wx('#wx-city').value = weather_city || '';
+    $wx('#tts-toggle').checked = tts_enabled === true;
+  }).catch(() => {});
+  $wx('#wx-save').addEventListener('click', async () => {
+    const v = $wx('#wx-city').value.trim();
+    await chrome.storage.local.set({ weather_city: v });
+    $wx('#wx-state').className = 'ok';
+    $wx('#wx-state').textContent = v
+      ? '已保存 ✓（约半小时内生效，重开浏览器可立即触发）'
+      : '已保存 ✓ 天气台词将退场';
+  });
+  $wx('#wx-detect').addEventListener('click', async () => {
+    $wx('#wx-state').className = '';
+    $wx('#wx-state').textContent = '正在检测…（走网络，可能几秒）';
+    chrome.runtime.sendMessage({ type: 'WEATHER_IP_DETECT' }, (res) => {
+      if (res && res.ok && res.city) {
+        $wx('#wx-city').value = res.city;
+        $wx('#wx-state').className = 'ok';
+        $wx('#wx-state').textContent = `${res.city}（代理出口城市，可能不是你在的城市）— 记得点保存`;
+      } else {
+        $wx('#wx-state').className = 'error';
+        $wx('#wx-state').textContent = '检测失败，试试手动填～';
+      }
+    });
+  });
+  $wx('#tts-toggle').addEventListener('change', async (e) => {
+    await chrome.storage.local.set({ tts_enabled: e.target.checked });
+  });
+
   // 令牌自举：Host 钉扎端点，扩展页经 host_permissions 可直连
   async function token() {
     const r = await fetch(MAILBOX + '/api/token');

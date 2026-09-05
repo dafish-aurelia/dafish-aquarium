@@ -56,6 +56,17 @@
     return { kind: null, title: (document.title || '').slice(0, 80), playing: null, excerpt: '' };
   }
 
+  // v0.9 天气视图：只读 storage 缓存（拉取在 background，本层零网络）。
+  // stale=true 的旧数据也照给——behavior 层自己决定要不要用（advisory 会跳过）。
+  let _wx = null;
+  try {
+    chrome.storage.local.get('weather_cache').then(({ weather_cache }) => { _wx = weather_cache || null; }).catch(() => {});
+    chrome.storage.onChanged.addListener((ch, area) => {
+      if (area === 'local' && ch.weather_cache) _wx = ch.weather_cache.newValue || null;
+    });
+  } catch (e) { /* 非扩展上下文（node 测试） */ }
+  function weather() { return _wx; }
+
   window.DafeiyuSenses = {
     capture() {
       const s = window.DafeiyuSanitize.sanitizeUrl(location.href);
@@ -69,5 +80,6 @@
     scene,
     homeNow,
     content,
+    weather,
   };
 })();

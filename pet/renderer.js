@@ -87,6 +87,9 @@
       if (emo) DafeiyuView.setEmotion(emo, ms);
       bubble.classList.remove('dafeiyu-heart');
       bubble.textContent = text;
+      // 仅"可见的鱼"发声：广播会打到所有 Tab，N 个 Tab 同时念一遍是灾难
+      // （气泡 DOM 本就有 active 门控，TTS 必须同样过这道门）
+      if (typeof window.DafeiyuVoice !== 'undefined' && text && S.enabled && S.active) window.DafeiyuVoice.speak(text);
       bubble.style.display = 'block';
       clearTimeout(bubble._t);
       bubble._t = setTimeout(() => { bubble.style.display = 'none'; }, ms);
@@ -138,6 +141,30 @@
     renderVisible,
   };
   window.DafeiyuView = DafeiyuView;
+
+  // ---- DafeiyuVoice（v0.9）：chrome.tts 系统音，默认关 ----
+  // 换音源的口子：provider 分支（本期恒 'chrome'），以后接网络 TTS 内部。
+  const _voiceCfg = { enabled: false };
+  chrome.storage.local.get('tts_enabled').then(({ tts_enabled }) => {
+    _voiceCfg.enabled = tts_enabled === true;
+  }).catch(() => {});
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area === 'local' && ch.tts_enabled) {
+      _voiceCfg.enabled = ch.tts_enabled.newValue === true;
+    }
+  });
+  window.DafeiyuVoice = {
+    enabled() { return _voiceCfg.enabled; },
+    speak(text) {
+      const D = window.DafeiyuVoiceRules;
+      if (!D || !D.shouldSpeak({ enabled: _voiceCfg.enabled }, 'chrome')) return;
+      // chrome.tts 不在内容脚本可用 API 白名单里 → 经 background SW 中继发声。
+      // （同时天然解决多标签页重复说话：见 showBubble 出口的 active 门控。）
+      try {
+        chrome.runtime.sendMessage({ type: 'TTS_SPEAK', text: String(text || '') });
+      } catch (e) { /* 扩展上下文重载中：静默失效 */ }
+    },
+  };
 
   // 行走帧异步探测：候选序列里实际存在的才入列（顺序即步态顺序），
   // 未就绪前为空数组，行为层据此跳过该轮散步。以后加新帧零代码：
